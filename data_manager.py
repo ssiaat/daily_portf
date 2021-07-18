@@ -210,7 +210,7 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     # fpath는 stock_code 로 받음
     ##  테이블 명이    숫자인경우  :  ' 작은따옴표 아니라  ` (물결키) 로 감쌈
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
-    data = pd.read_sql(sql=sql, con=conn)
+    data = pd.read_sql(sql=sql, con=conn).fillna(0)
     data['ks200'] = ks200.kospi.values
 
 
