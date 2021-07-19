@@ -210,7 +210,7 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     # fpath는 stock_code 로 받음
     ##  테이블 명이    숫자인경우  :  ' 작은따옴표 아니라  ` (물결키) 로 감쌈
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
-    data = pd.read_sql(sql=sql, con=conn).fillna(0)
+    data = pd.read_sql(sql=sql, con=conn)
     data['ks200'] = ks200.kospi.values
 
 
@@ -222,13 +222,12 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     # 기간 필터링
     # date 만   string 으로   타입변환해야함
     data['date'] = data['date'].apply(lambda _: str(_))
-    # print(data.dtypes)
     data['date'] = data['date'].str.replace('-', '')
     data['date'] = data['date'].str.split(' ').str[0]
 
     # processing nan
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
-    data = data.set_index('date').loc[data_del_na.date].reset_index()
+    data = data.set_index('date').loc[data_del_na.date].reset_index().fillna(0)
     # data = data[(data['date'] >= date_from) & (data['date'] <= date_to)]
 
     # 차트 데이터 분리

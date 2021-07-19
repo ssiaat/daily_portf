@@ -26,7 +26,7 @@ if os.environ['KERAS_BACKEND'] == 'tensorflow':
         BatchNormalization, Dropout, MaxPooling2D, Flatten
     from tensorflow.keras.initializers import he_normal
     from tensorflow.keras.optimizers import SGD, Adam
-    from tensorflow.keras.backend import set_session
+    from tensorflow.python.keras.backend import set_session
     import tensorflow as tf
 
     graph = tf.compat.v1.get_default_graph()

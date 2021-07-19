@@ -19,7 +19,7 @@ model_name = 'lstm'
 value_name = None
 policy_name = None
 start_date = '20000201'
-end_date = '20151230'
+end_date = '20001229'
 
 if __name__ == '__main__':
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
     parser.add_argument('--balance', type=int, default=10000000)
-    parser.add_argument('--num_epoches', type=int, default=100)
+    parser.add_argument('--num_epoches', type=int, default=30)
     parser.add_argument('--delayed_reward_threshold',
                         type=float, default=0.05)
     parser.add_argument('--backend',
@@ -114,7 +114,7 @@ if __name__ == '__main__':
     #-----------------------
     # 학습은 삼성전자부터 마지막 ticker, 마지막 ticker부터 삼성전자 순서로 진행함
     #-----------------------
-    stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)
+    stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)[:2]
     args.stock_code = np.concatenate([stock_codes, np.flip(stock_codes)])
 
     for stock_code in args.stock_code:
