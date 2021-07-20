@@ -117,14 +117,41 @@ if __name__ == '__main__':
     stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)[:2]
     args.stock_code = np.concatenate([stock_codes, np.flip(stock_codes)])
 
+    ## 여기서 읽어온것 다 합쳐야함
+    dfs = pd.DataFrame()
+    def make_dfs():
+        for stock_code in args.stock_code:
+            # From local db,. 한종목씩
+            chart_data, training_data = data_manager.load_data_sql(
+                stock_code, args.start_date, args.end_date, ver=args.ver)  ## 인자 1 ## 인자 2, 3
+            # columns
+            # cols = [학습대상 특성들]
+            # df_unit = df_unit[cols]
+            df_unit  = training_data
+            dfs = pd.concat([dfs, df_unit] , axis=1)  ## 옆으로 늘어뜨려붙이기
+        return dfs
+
+    # 그  후에  학습하도록 집어넣기.
+
+    # dfs 전체 하나가 나옮
+
+    ## 원본
     for stock_code in args.stock_code:
         # 차트 데이터, 학습 데이터 준비
         # chart_data, training_data = data_manager.load_data(
         #     os.path.join(settings.BASE_DIR,
         #     'data/{}/{}.csv'.format(args.ver, stock_code)),
         #     args.start_date, args.end_date, ver=args.ver)
+
+        # From local db
         chart_data, training_data = data_manager.load_data_sql(
-            stock_code, args.start_date, args.end_date, ver=args.ver)  ## 인자 1 ## 인자 2, 3
+           stock_code, args.start_date, args.end_date, ver=args.ver)  ## 인자 1 ## 인자 2, 3
+
+
+
+        # From local ec2
+        # chart_data, training_data = data_manager.load_data_ec2(
+        #     stock_code, args.start_date, args.end_date, ver=args.ver)  ## 인자 1 ## 인자 2, 3
 
         # 최소/최대 투자 단위 설정
         try:
@@ -141,6 +168,8 @@ if __name__ == '__main__':
 
         # 강화학습 시작
         learner = None
+        # Not defined Error 때문에
+
         if args.rl_method != 'a3c':
             common_params.update({'stock_code': stock_code,
                                   'chart_data': chart_data,

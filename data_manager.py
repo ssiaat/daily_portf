@@ -4,6 +4,7 @@ import numpy as np
 # db연결
 import pymysql
 conn = pymysql.connect(host='localhost', user='root', password='0000', db='ticker', port=3306, charset='utf8')
+
 curs = conn.cursor()
 
 # ks200 데이터는 따로 받아옴
@@ -203,6 +204,7 @@ from sqlalchemy import create_engine
 
 
 ## 기본 ver = v2
+# load_data_sql 한종목을 읽어오는것.
 def load_data_sql(fpath, date_from, date_to, ver='v3'):
     header = None if ver == 'v1' else 0
     # data = pd.read_csv(fpath, thousands=',', header=header,
@@ -266,3 +268,87 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
         raise Exception('Invalid version.')
 
     return chart_data, training_data
+
+
+## 기본 ver = v2
+def load_data_ec2(fpath, date_from, date_to, ver='v3'):
+    header = None if ver == 'v1' else 0
+    # data = pd.read_csv(fpath, thousands=',', header=header,
+    #                    converters={'date': lambda x: str(x)})
+    # fpath는 stock_code 로 받음
+    ##  테이블 명이    숫자인경우  :  ' 작은따옴표 아니라  ` (물결키) 로 감쌈
+    sql = f"SELECT * FROM rltrader_datas.`{fpath}` ORDER BY rltrader_datas.`{fpath}`.date ASC;"
+    engine2 = create_engine("mysql+pymysql://root:" + "0000" + "@13.209.4.191:3306/rltrader_datas?charset=utf8",
+                            encoding='utf-8')
+    data = pd.read_sql(sql=sql, con=engine2)
+    print('----------Load Data from EC2 ')
+    print(data)
+
+    if ver == 'v1':
+        data.columns = ['date', 'open', 'high', 'low', 'close', 'volume']
+
+    # 날짜 오름차순 정렬
+    data = data.sort_values(by='date').reset_index()
+
+    # 데이터 전처리
+    data = preprocess(data, ver="v4")
+
+    # 기간 필터링
+    # date 만   string 으로   타입변환해야함
+    data['date'] = data['date'].apply(lambda _: str(_))
+    # print(data.dtypes)
+    data['date'] = data['date'].str.replace('-', '')
+    data['date'] = data['date'].str.split(' ').str[0]
+
+    print(f'data _ Before data split : {data}')
+    data = data[(data['date'] >= date_from) & (data['date'] <= date_to)]
+    print(f' date_from : {date_from}\n date_to :{date_to}\n')
+    # data = data.dropna()
+    print(f'data _ After data split : {data}')
+
+    # 차트 데이터 분리
+    chart_data = data[COLUMNS_CHART_DATA]
+
+    buy_hold_return = (chart_data.close.pct_change() + 1).fillna(1).cumprod() - 1
+    try:
+        print(f'\n\n\n\n--------------------------------------------------------------- : {data["Ticker"].iloc[1]}')
+    except:
+        print(f'--------------------------------------------------------------------Nope ')
+
+    try:
+        print(f'-----------------------------------------------Buy & Hold 100% : {100 * buy_hold_return.iloc[-1]} %')
+    except:
+        print('Nope')
+
+    # 학습 데이터 분리
+    training_data = None
+    if ver == 'v1':
+        training_data = data[COLUMNS_TRAINING_DATA_V1]
+    elif ver == 'v1.rich':
+        training_data = data[COLUMNS_TRAINING_DATA_V1_RICH]
+    elif ver == 'v2':
+        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
+        # data.loc[:, ['per', 'pbr', 'roe']] = \
+        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
+        training_data = data[COLUMNS_TRAINING_DATA_V3]
+        training_data = training_data.apply(np.tanh)
+    elif ver == 'v3':
+        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
+        # data.loc[:, ['per', 'pbr', 'roe']] = \
+        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
+        training_data = data[COLUMNS_TRAINING_DATA_V3]
+        training_data = training_data.astype(float)
+        training_data = training_data.apply(np.tanh)
+    elif ver == 'v4':
+        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
+        # data.loc[:, ['per', 'pbr', 'roe']] = \
+        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
+        training_data = data[COLUMNS_TRAINING_DATA_V4]
+        training_data = training_data.astype(float)
+        training_data = training_data.apply(np.tanh)
+
+    else:
+        raise Exception('Invalid version.')
+
+    return chart_data, training_data
+
