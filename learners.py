@@ -20,7 +20,7 @@ class ReinforcementLearner:
                 chart_data=None, training_data=None,
                 min_trading_unit=1, max_trading_unit=2, 
                 delayed_reward_threshold=.05,
-                net='dnn', num_ticker=100, num_features=10, num_steps=1, lr=0.001,
+                net='dnn', num_ticker=100, num_features=7, num_steps=1, lr=0.001,
                 value_network=None, policy_network=None,
                 output_path='', reuse_models=True, visualize=False):
         # 인자 확인
@@ -49,7 +49,11 @@ class ReinforcementLearner:
 
         self.num_ticker = num_ticker
         # 벡터 크기 = 학습 데이터 벡터 크기 + 에이전트 상태 크기
-        self.num_features = self.agent.STATE_DIM
+        ###########################
+        # todo
+        # agent.get_state함수 수정한뒤 다음 줄을 //self.num_features = self.agent.STATE_DIM//로 수정하기
+        ###########################
+        self.num_features = 0
         if self.training_data is not None:
             self.num_features += num_features
         # 신경망 설정
@@ -146,8 +150,13 @@ class ReinforcementLearner:
         if len(self.training_data) > self.training_data_idx + 1:
             self.training_data_idx += 1
             self.sample = self.training_data.iloc[
-                self.training_data_idx].tolist()
-            self.sample.extend(self.agent.get_states())
+                self.training_data_idx].values.reshape((-1,7)).tolist()
+            #############################################
+            # todo
+            # agent.get_state() 가 (500,2)로 상태를 줘서 self.sample 옆에 붙이는 코드 작성
+            # 현재 self.sample의 형태는 [num_ticker, num_features] , 단 num features에 state가 포함되지 않은 상태
+            #############################################
+            # self.sample.extend(self.agent.get_states())
             return self.sample
         return None
 
@@ -277,6 +286,8 @@ class ReinforcementLearner:
             while True:
                 # 샘플 생성
                 next_sample = self.build_sample()
+                print(next_sample)
+                exit()
                 if next_sample is None:
                     break
                 # num_steps만큼 샘플 저장

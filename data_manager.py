@@ -200,7 +200,22 @@ def load_data(fpath, date_from, date_to, ver='v3'):
     return chart_data, training_data
 
 
-from sqlalchemy import create_engine
+## 여기서 읽어온것 다 합쳐야함
+
+def make_data(stock_codes, start_date, end_date):
+    training_df = pd.DataFrame()
+    chart_df = pd.DataFrame()
+    for stock_code in stock_codes:
+        # From local db,. 한종목씩
+        chart_data, training_data = load_data_sql(
+            stock_code, start_date, end_date)  ## 인자 1 ## 인자 2, 3
+        # columns
+        # cols = [학습대상 특성들]
+        # df_unit = df_unit[cols]
+        training_df = pd.concat([training_df, training_data] , axis=1)  ## 옆으로 늘어뜨려붙이기
+        chart_df = pd.concat([chart_df, chart_data])
+    return chart_df, training_df
+
 
 
 ## 기본 ver = v2
@@ -233,7 +248,7 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     # data = data[(data['date'] >= date_from) & (data['date'] <= date_to)]
 
     # 차트 데이터 분리
-    chart_data = data[COLUMNS_CHART_DATA]
+    chart_data = data[['date', 'price_mod']].set_index('date')
 
     # 학습 데이터 분리
     training_data = None
@@ -270,6 +285,8 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     return chart_data, training_data
 
 
+from sqlalchemy import create_engine
+
 ## 기본 ver = v2
 def load_data_ec2(fpath, date_from, date_to, ver='v3'):
     header = None if ver == 'v1' else 0
@@ -291,7 +308,7 @@ def load_data_ec2(fpath, date_from, date_to, ver='v3'):
     data = data.sort_values(by='date').reset_index()
 
     # 데이터 전처리
-    data = preprocess(data, ver="v4")
+    data = transformation(data, ver="v4")
 
     # 기간 필터링
     # date 만   string 으로   타입변환해야함

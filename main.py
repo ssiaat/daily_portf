@@ -24,10 +24,9 @@ end_date = '20001229'
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--stock_code', nargs='+')
     parser.add_argument('--ver', choices=['v1', 'v2', 'v3', 'v4'], default='v3')
     parser.add_argument('--rl_method',
-                        choices=['dqn', 'pg', 'ac', 'a2c', 'a3c'], default='a2c')
+                        choices=['dqn', 'pg', 'ac', 'a2c'], default='a2c')
     # parser.add_argument('--net',
     #                     choices=['dnn', 'lstm', 'cnn'], default=model_name)
     parser.add_argument('--num_steps', type=int, default=1)
@@ -58,8 +57,7 @@ if __name__ == '__main__':
         os.environ['KERAS_BACKEND'] = 'plaidml.keras.backend'
 
     # 출력 경로 설정
-    output_path = os.path.join(settings.BASE_DIR,
-                               'output/{}_{}_{}'.format(args.output_name, args.rl_method))
+    output_path = os.path.join(settings.BASE_DIR, 'output/{}_{}'.format(args.output_name, args.rl_method))
     if not os.path.isdir(output_path):
         os.makedirs(output_path)
 
@@ -73,8 +71,7 @@ if __name__ == '__main__':
     stream_handler = logging.StreamHandler(sys.stdout)
     file_handler.setLevel(logging.DEBUG)
     stream_handler.setLevel(logging.INFO)
-    logging.basicConfig(format="%(message)s",
-                        handlers=[file_handler, stream_handler], level=logging.DEBUG)
+    logging.basicConfig(format="%(message)s", handlers=[file_handler, stream_handler], level=logging.DEBUG)
 
     if args.learning == True:
         print('-----------------this running is for training')
@@ -94,17 +91,16 @@ if __name__ == '__main__':
                                           'models/{}.h5'.format(args.value_network_name))
     else:
         value_network_path = os.path.join(
-            output_path, '{}_{}_value_{}.h5'.format(
+            output_path, '{}_{}_value.h5'.format(
                 args.rl_method, args.output_name))
     if args.policy_network_name is not None:
         policy_network_path = os.path.join(settings.BASE_DIR,
                                            'models/{}.h5'.format(args.policy_network_name))
     else:
         policy_network_path = os.path.join(
-            output_path, '{}_{}_policy_{}.h5'.format(
+            output_path, '{}_{}_policy.h5'.format(
                 args.rl_method, args.output_name))
 
-    common_params = {}
     list_stock_code = []
     list_chart_data = []
     list_training_data = []
@@ -115,107 +111,37 @@ if __name__ == '__main__':
     # 학습은 삼성전자부터 마지막 ticker, 마지막 ticker부터 삼성전자 순서로 진행함
     #-----------------------
     stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)[:2]
-    args.stock_code = np.concatenate([stock_codes, np.flip(stock_codes)])
+    chart_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
 
-    ## 여기서 읽어온것 다 합쳐야함
-    dfs = pd.DataFrame()
-    def make_dfs():
-        for stock_code in args.stock_code:
-            # From local db,. 한종목씩
-            chart_data, training_data = data_manager.load_data_sql(
-                stock_code, args.start_date, args.end_date, ver=args.ver)  ## 인자 1 ## 인자 2, 3
-            # columns
-            # cols = [학습대상 특성들]
-            # df_unit = df_unit[cols]
-            df_unit  = training_data
-            dfs = pd.concat([dfs, df_unit] , axis=1)  ## 옆으로 늘어뜨려붙이기
-        return dfs
+    # 공통 파라미터 설정
+    common_params = {'rl_method': args.rl_method, 'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
+                     'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes),
+                     'num_steps': args.num_steps, 'lr': args.lr, 'visualize':args.visualize,
+                     'output_path': output_path, 'reuse_models': args.reuse_models}
+    print(common_params)
+    # 강화학습 시작
+    learner = None
+    # Not defined Error 때문에
 
-    # 그  후에  학습하도록 집어넣기.
-
-    # dfs 전체 하나가 나옮
-
-    ## 원본
-    for stock_code in args.stock_code:
-        # 차트 데이터, 학습 데이터 준비
-        # chart_data, training_data = data_manager.load_data(
-        #     os.path.join(settings.BASE_DIR,
-        #     'data/{}/{}.csv'.format(args.ver, stock_code)),
-        #     args.start_date, args.end_date, ver=args.ver)
-
-        # From local db
-        chart_data, training_data = data_manager.load_data_sql(
-           stock_code, args.start_date, args.end_date, ver=args.ver)  ## 인자 1 ## 인자 2, 3
-
-
-
-        # From local ec2
-        # chart_data, training_data = data_manager.load_data_ec2(
-        #     stock_code, args.start_date, args.end_date, ver=args.ver)  ## 인자 1 ## 인자 2, 3
-
-        # 최소/최대 투자 단위 설정
-        try:
-            min_trading_unit = max(int(100000 / chart_data.iloc[-1]['price_mod']), 1)
-            max_trading_unit = max(int(1000000 / chart_data.iloc[-1]['price_mod']), 1)
-        except:
-            None
-
-        # 공통 파라미터 설정
-        common_params = {'rl_method': args.rl_method, 'trainable': args.learning,
-                         'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker':len(args.stock_code),
-                         'num_steps': args.num_steps, 'lr': args.lr, 'visualize':args.visualize,
-                         'output_path': output_path, 'reuse_models': args.reuse_models}
-
-        # 강화학습 시작
-        learner = None
-        # Not defined Error 때문에
-
-        if args.rl_method != 'a3c':
-            common_params.update({'stock_code': stock_code,
-                                  'chart_data': chart_data,
-                                  'training_data': training_data,
-                                  'min_trading_unit': min_trading_unit,
-                                  'max_trading_unit': max_trading_unit})
-            if args.rl_method == 'dqn':
-                learner = DQNLearner(**{**common_params,
-                                        'value_network_path': value_network_path})
-            elif args.rl_method == 'pg':
-                learner = PolicyGradientLearner(**{**common_params,
-                                                   'policy_network_path': policy_network_path})
-            elif args.rl_method == 'ac':
-                learner = ActorCriticLearner(**{**common_params,
-                                                'value_network_path': value_network_path,
-                                                'policy_network_path': policy_network_path})
-            elif args.rl_method == 'a2c':
-                learner = A2CLearner(**{**common_params,
+    common_params.update({'chart_data': chart_data,
+                          'training_data': training_data})
+    if args.rl_method == 'dqn':
+        learner = DQNLearner(**{**common_params,
+                                'value_network_path': value_network_path})
+    elif args.rl_method == 'pg':
+        learner = PolicyGradientLearner(**{**common_params,
+                                           'policy_network_path': policy_network_path})
+    elif args.rl_method == 'ac':
+        learner = ActorCriticLearner(**{**common_params,
                                         'value_network_path': value_network_path,
                                         'policy_network_path': policy_network_path})
-            if learner is not None:
-                learner.run(balance=args.balance,
-                            num_epoches=args.num_epoches,
-                            discount_factor=args.discount_factor,
-                            start_epsilon=args.start_epsilon,
-                            learning=args.learning)
-                learner.save_models()
-        else:
-            list_stock_code.append(stock_code)
-            list_chart_data.append(chart_data)
-            list_training_data.append(training_data)
-            list_min_trading_unit.append(min_trading_unit)
-            list_max_trading_unit.append(max_trading_unit)
-
-    if args.rl_method == 'a3c':
-        learner = A3CLearner(**{
-            **common_params,
-            'list_stock_code': list_stock_code,
-            'list_chart_data': list_chart_data,
-            'list_training_data': list_training_data,
-            'list_min_trading_unit': list_min_trading_unit,
-            'list_max_trading_unit': list_max_trading_unit,
-            'value_network_path': value_network_path,
-            'policy_network_path': policy_network_path})
-
-        learner.run(balance=args.balance, num_epoches=args.num_epoches,
+    elif args.rl_method == 'a2c':
+        learner = A2CLearner(**{**common_params,
+                                'value_network_path': value_network_path,
+                                'policy_network_path': policy_network_path})
+    if learner is not None:
+        learner.run(balance=args.balance,
+                    num_epoches=args.num_epoches,
                     discount_factor=args.discount_factor,
                     start_epsilon=args.start_epsilon,
                     learning=args.learning)
