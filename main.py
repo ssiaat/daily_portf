@@ -135,7 +135,7 @@ if __name__ == '__main__':
 
         # 공통 파라미터 설정
         common_params = {'rl_method': args.rl_method, 'trainable': args.learning,
-                         'delayed_reward_threshold': args.delayed_reward_threshold,
+                         'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker':len(args.stock_code),
                          'num_steps': args.num_steps, 'lr': args.lr, 'visualize':args.visualize,
                          'output_path': output_path, 'reuse_models': args.reuse_models}
 

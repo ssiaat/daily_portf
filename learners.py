@@ -20,7 +20,7 @@ class ReinforcementLearner:
                 chart_data=None, training_data=None,
                 min_trading_unit=1, max_trading_unit=2, 
                 delayed_reward_threshold=.05,
-                net='dnn', num_steps=1, lr=0.001,
+                net='dnn', num_ticker=100, num_features=10, num_steps=1, lr=0.001,
                 value_network=None, policy_network=None,
                 output_path='', reuse_models=True, visualize=False):
         # 인자 확인
@@ -46,10 +46,12 @@ class ReinforcementLearner:
         self.training_data = training_data
         self.sample = None
         self.training_data_idx = -1
+
+        self.num_ticker = num_ticker
         # 벡터 크기 = 학습 데이터 벡터 크기 + 에이전트 상태 크기
         self.num_features = self.agent.STATE_DIM
         if self.training_data is not None:
-            self.num_features += self.training_data.shape[1]
+            self.num_features += num_features
         # 신경망 설정
         self.net = net
         self.num_steps = num_steps
@@ -85,7 +87,8 @@ class ReinforcementLearner:
         if self.net == 'dnn':
             self.value_network = DNN(
                 input_dim=self.num_features, 
-                output_dim=self.agent.NUM_ACTIONS,
+                output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
+                num_ticker=self.num_ticker,
                 trainable=self.trainable,
                 lr=self.lr, shared_network=shared_network, 
                 activation=activation, loss=loss)
@@ -99,7 +102,8 @@ class ReinforcementLearner:
         if self.net == 'dnn':
             self.policy_network = DNN(
                 input_dim=self.num_features, 
-                output_dim=self.agent.NUM_ACTIONS,
+                output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
+                num_ticker=self.num_ticker,
                 trainable=self.trainable,
                 lr=self.lr, shared_network=shared_network, 
                 activation=activation, loss=loss)

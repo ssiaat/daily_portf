@@ -7,9 +7,8 @@ def set_session(sess): pass
 print('----------------Keras Backend : ')
 print(os.environ['KERAS_BACKEND'])
 
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense,\
-        BatchNormalization, Dropout, MaxPooling2D, Flatten
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Dense,BatchNormalization, Concatenate
 from tensorflow.keras.initializers import he_normal
 from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.python.keras.backend import set_session
@@ -23,10 +22,11 @@ sess = tf.compat.v1.Session()
 class Network:
     lock = threading.Lock()
 
-    def __init__(self, input_dim=0, output_dim=0, trainable=False, lr=0.001,
+    def __init__(self, input_dim=0, output_dim=0, num_ticker=100, trainable=False, lr=0.001,
                  shared_network=None, activation='sigmoid', loss='mse'):
         self.input_dim = input_dim
         self.output_dim = output_dim
+        self.num_ticker = num_ticker
         self.trainable = trainable
         self.shared_network = shared_network
         self.activation = activation
@@ -66,18 +66,18 @@ class Network:
             if net == 'dnn':
                 return DNN.get_network_head(Input((input_dim,)), trainable)
 
-
 class DNN(Network):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.mini_models = [self.mini_dnn() for _ in range(self.num_ticker)]
         with graph.as_default():
             if sess is not None:
                 set_session(sess)
             inp = None
             output = None
             if self.shared_network is None:
-                inp = Input((self.input_dim,))
-                output = self.get_network_head(inp, self.trainable).output
+                inp = Input((self.input_dim * self.num_ticker,))
+                output = self.get_network_head(inp, self.num_ticker, self.trainable).output
             else:
                 inp = self.shared_network.input
                 output = self.shared_network.output
@@ -88,24 +88,30 @@ class DNN(Network):
             self.model.compile(
                 optimizer=self.optimizer, loss=self.loss)
 
+    def mini_dnn(self):
+        model = Sequential()
+        model.add(Input((self.input_dim,)))
+        model.add(Dense(256, activation='sigmoid', kernel_initializer='random_normal'))
+        model.add(BatchNormalization(trainable=self.trainable))
+        model.add(Dense(128, activation='sigmoid', kernel_initializer='random_normal'))
+        model.add(BatchNormalization(trainable=self.trainable))
+        return model
+
     @staticmethod
-    def get_network_head(inp, trainable):
+    def get_network_head(inp, mini_models, num_ticker, trainable):
+        output = Concatenate()([m.output for m in mini_models])
+        output_r = Dense(256, activation='sigmoid',
+                       kernel_initializer='random_normal')(output)
+        output_r = BatchNormalization(trainable=trainable)(output_r)
         output = Dense(256, activation='sigmoid',
-                       kernel_initializer='random_normal')(inp)
+                       kernel_initializer='random_normal')(output)
         output = BatchNormalization(trainable=trainable)(output)
-        output = Dropout(0.1)(output)
+        output = Dense(256, activation='sigmoid',
+                       kernel_initializer='random_normal')(output)
+        output = BatchNormalization(trainable=trainable)(output)
         output = Dense(128, activation='sigmoid',
-                       kernel_initializer='random_normal')(output)
+                       kernel_initializer='random_normal')(output + output_r)
         output = BatchNormalization(trainable=trainable)(output)
-        output = Dropout(0.1)(output)
-        output = Dense(64, activation='sigmoid',
-                       kernel_initializer='random_normal')(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = Dropout(0.1)(output)
-        output = Dense(32, activation='sigmoid',
-                       kernel_initializer='random_normal')(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = Dropout(0.1)(output)
         return Model(inp, output)
 
     def train_on_batch(self, x, y):
