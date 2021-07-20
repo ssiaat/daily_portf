@@ -4,6 +4,7 @@ import numpy as np
 # db연결
 import pymysql
 conn = pymysql.connect(host='localhost', user='root', password='0000', db='ticker', port=3306, charset='utf8')
+
 curs = conn.cursor()
 
 # ks200 데이터는 따로 받아옴
@@ -203,6 +204,7 @@ from sqlalchemy import create_engine
 
 
 ## 기본 ver = v2
+# load_data_sql 한종목을 읽어오는것.
 def load_data_sql(fpath, date_from, date_to, ver='v3'):
     header = None if ver == 'v1' else 0
     # data = pd.read_csv(fpath, thousands=',', header=header,
@@ -350,3 +352,4 @@ def load_data_ec2(fpath, date_from, date_to, ver='v3'):
         raise Exception('Invalid version.')
 
     return chart_data, training_data
+
