@@ -8,7 +8,7 @@ import numpy as np
 from utils import sigmoid
 from environment import Environment
 from agent import Agent
-from networks import Network, DNN, LSTMNetwork, CNN
+from networks import Network, DNN
 from visualizer import Visualizer
 
 
@@ -89,22 +89,6 @@ class ReinforcementLearner:
                 trainable=self.trainable,
                 lr=self.lr, shared_network=shared_network, 
                 activation=activation, loss=loss)
-        elif self.net == 'lstm':
-            self.value_network = LSTMNetwork(
-                input_dim=self.num_features, 
-                output_dim=self.agent.NUM_ACTIONS,
-                trainable=self.trainable,
-                lr=self.lr, num_steps=self.num_steps, 
-                shared_network=shared_network, 
-                activation=activation, loss=loss)
-        elif self.net == 'cnn':
-            self.value_network = CNN(
-                input_dim=self.num_features, 
-                output_dim=self.agent.NUM_ACTIONS,
-                trainable=self.trainable,
-                lr=self.lr, num_steps=self.num_steps, 
-                shared_network=shared_network, 
-                activation=activation, loss=loss)
         if self.reuse_models and \
             os.path.exists(self.value_network_path):
                 self.value_network.load_model(
@@ -118,22 +102,6 @@ class ReinforcementLearner:
                 output_dim=self.agent.NUM_ACTIONS,
                 trainable=self.trainable,
                 lr=self.lr, shared_network=shared_network, 
-                activation=activation, loss=loss)
-        elif self.net == 'lstm':
-            self.policy_network = LSTMNetwork(
-                input_dim=self.num_features, 
-                output_dim=self.agent.NUM_ACTIONS,
-                trainable=self.trainable,
-                lr=self.lr, num_steps=self.num_steps,
-                shared_network=shared_network, 
-                activation=activation, loss=loss)
-        elif self.net == 'cnn':
-            self.policy_network = CNN(
-                input_dim=self.num_features, 
-                output_dim=self.agent.NUM_ACTIONS,
-                trainable=self.trainable,
-                lr=self.lr, num_steps=self.num_steps, 
-                shared_network=shared_network, 
                 activation=activation, loss=loss)
         if self.reuse_models and \
             os.path.exists(self.policy_network_path):

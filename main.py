@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-model_name = 'lstm'
+model_name = 'dnn'
 value_name = None
 policy_name = None
 start_date = '20000201'
@@ -28,8 +28,8 @@ if __name__ == '__main__':
     parser.add_argument('--ver', choices=['v1', 'v2', 'v3', 'v4'], default='v3')
     parser.add_argument('--rl_method',
                         choices=['dqn', 'pg', 'ac', 'a2c', 'a3c'], default='a2c')
-    parser.add_argument('--net',
-                        choices=['dnn', 'lstm', 'cnn'], default=model_name)
+    # parser.add_argument('--net',
+    #                     choices=['dnn', 'lstm', 'cnn'], default=model_name)
     parser.add_argument('--num_steps', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--discount_factor', type=float, default=0.9)
@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
     # 출력 경로 설정
     output_path = os.path.join(settings.BASE_DIR,
-                               'output/{}_{}_{}'.format(args.output_name, args.rl_method, args.net))
+                               'output/{}_{}_{}'.format(args.output_name, args.rl_method))
     if not os.path.isdir(output_path):
         os.makedirs(output_path)
 
@@ -95,14 +95,14 @@ if __name__ == '__main__':
     else:
         value_network_path = os.path.join(
             output_path, '{}_{}_value_{}.h5'.format(
-                args.rl_method, args.net, args.output_name))
+                args.rl_method, args.output_name))
     if args.policy_network_name is not None:
         policy_network_path = os.path.join(settings.BASE_DIR,
                                            'models/{}.h5'.format(args.policy_network_name))
     else:
         policy_network_path = os.path.join(
             output_path, '{}_{}_policy_{}.h5'.format(
-                args.rl_method, args.net, args.output_name))
+                args.rl_method, args.output_name))
 
     common_params = {}
     list_stock_code = []
@@ -136,9 +136,8 @@ if __name__ == '__main__':
         # 공통 파라미터 설정
         common_params = {'rl_method': args.rl_method, 'trainable': args.learning,
                          'delayed_reward_threshold': args.delayed_reward_threshold,
-                         'net': args.net, 'num_steps': args.num_steps, 'lr': args.lr,
-                         'output_path': output_path, 'reuse_models': args.reuse_models,
-                         'visualize':args.visualize}
+                         'num_steps': args.num_steps, 'lr': args.lr, 'visualize':args.visualize,
+                         'output_path': output_path, 'reuse_models': args.reuse_models}
 
         # 강화학습 시작
         learner = None

@@ -2,40 +2,22 @@ import os
 import threading
 import numpy as np
 
-
-class DummyGraph:
-    def as_default(self): return self
-
-    def __enter__(self): pass
-
-    def __exit__(self, type, value, traceback): pass
-
-
 def set_session(sess): pass
 
-
-graph = DummyGraph()
-sess = None
 print('----------------Keras Backend : ')
-
-# os.environ['KERAS_BACKEND'] = 'tensorflow'
 print(os.environ['KERAS_BACKEND'])
-if os.environ['KERAS_BACKEND'] == 'tensorflow':
-    from tensorflow.keras.models import Model
-    from tensorflow.keras.layers import Input, Dense, LSTM, Conv2D, \
-        BatchNormalization, Dropout, MaxPooling2D, Flatten
-    from tensorflow.keras.initializers import he_normal
-    from tensorflow.keras.optimizers import SGD, Adam
-    from tensorflow.python.keras.backend import set_session
-    import tensorflow as tf
 
-    graph = tf.compat.v1.get_default_graph()
-    sess = tf.compat.v1.Session()
-elif os.environ['KERAS_BACKEND'] == 'plaidml.keras.backend':
-    from keras.models import Model
-    from keras.layers import Input, Dense, LSTM, Conv2D, \
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Dense,\
         BatchNormalization, Dropout, MaxPooling2D, Flatten
-    from keras.optimizers import SGD
+from tensorflow.keras.initializers import he_normal
+from tensorflow.keras.optimizers import SGD, Adam
+from tensorflow.python.keras.backend import set_session
+from tensorflow.keras import Input
+import tensorflow as tf
+
+graph = tf.compat.v1.get_default_graph()
+sess = tf.compat.v1.Session()
 
 
 class Network:
@@ -83,12 +65,6 @@ class Network:
                 set_session(sess)
             if net == 'dnn':
                 return DNN.get_network_head(Input((input_dim,)), trainable)
-            elif net == 'lstm':
-                return LSTMNetwork.get_network_head(
-                    Input((num_steps, input_dim)), trainable)
-            elif net == 'cnn':
-                return CNN.get_network_head(
-                    Input((1, num_steps, input_dim)), trainable)
 
 
 class DNN(Network):
@@ -138,127 +114,4 @@ class DNN(Network):
 
     def predict(self, sample):
         sample = np.array(sample).reshape((1, self.input_dim))
-        return super().predict(sample)
-
-
-class LSTMNetwork(Network):
-    def __init__(self, *args, num_steps=1, **kwargs):
-        super().__init__(*args, **kwargs)
-        with graph.as_default():
-            if sess is not None:
-                set_session(sess)
-            self.num_steps = num_steps
-            inp = None
-            output = None
-            if self.shared_network is None:
-                inp = Input((self.num_steps, self.input_dim))
-                output = self.get_network_head(inp, self.trainable).output
-            else:
-                inp = self.shared_network.input
-                output = self.shared_network.output
-            output = Dense(
-                self.output_dim, #activation=self.activation,
-                kernel_initializer=he_normal())(output)
-            self.model = Model(inp, output)
-            self.model.compile(
-                optimizer=self.optimizer, loss=self.loss)
-
-    @staticmethod
-    def get_network_head(inp, trainable):
-        initializer = he_normal()
-        output = LSTM(1024, dropout=0.1,
-                      return_sequences=True, stateful=False,
-                      kernel_initializer=initializer)(inp)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = LSTM(1024, dropout=0.1,
-                      return_sequences=True, stateful=False,
-                      kernel_initializer=initializer)(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = LSTM(512, dropout=0.1,
-                      return_sequences=True, stateful=False,
-                      kernel_initializer=initializer)(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = LSTM(512, dropout=0.1,
-                      return_sequences=True, stateful=False,
-                      kernel_initializer=initializer)(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = LSTM(256, dropout=0.1,
-                      stateful=False,
-                      kernel_initializer=initializer)(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        return Model(inp, output)
-
-    def train_on_batch(self, x, y):
-        x = np.array(x).reshape((-1, self.num_steps, self.input_dim))
-        return super().train_on_batch(x, y)
-
-    def predict(self, sample):
-        sample = np.array(sample).reshape(
-            (1, self.num_steps, self.input_dim))
-        return super().predict(sample)
-
-
-class CNN(Network):
-    def __init__(self, *args, num_steps=1, **kwargs):
-        super().__init__(*args, **kwargs)
-        with graph.as_default():
-            if sess is not None:
-                set_session(sess)
-            self.num_steps = num_steps
-            inp = None
-            output = None
-            if self.shared_network is None:
-                inp = Input((self.num_steps, self.input_dim, 1))
-                output = self.get_network_head(inp, self.trainable).output
-            else:
-                inp = self.shared_network.input
-                output = self.shared_network.output
-            output = Dense(
-                self.output_dim, activation=self.activation,
-                kernel_initializer='random_normal')(output)
-            self.model = Model(inp, output)
-            self.model.compile(
-                optimizer=self.optimizer, loss=self.loss)
-
-    @staticmethod
-    def get_network_head(inp, trainable):
-        output = Conv2D(512, kernel_size=(1, 5),
-                        padding='same', activation='relu',
-                        kernel_initializer='random_normal')(inp)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = MaxPooling2D(pool_size=(1, 2), padding='same')(output)
-        output = Conv2D(256, kernel_size=(1, 5),
-                        padding='same', activation='relu',
-                        kernel_initializer='random_normal')(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = MaxPooling2D(pool_size=(1, 2), padding='same')(output)
-        # output = Dropout(0.1)(output)
-        output = Conv2D(128, kernel_size=(1, 5),
-                        padding='same', activation='relu',
-                        kernel_initializer='random_normal')(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = MaxPooling2D(pool_size=(1, 2), padding='same')(output)
-        # output = Dropout(0.1)(output)
-        output = Conv2D(64, kernel_size=(1, 5),
-                        padding='same', activation='relu',
-                        kernel_initializer='random_normal')(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = MaxPooling2D(pool_size=(1, 2), padding='same')(output)
-        # output = Dropout(0.1)(output)
-        output = Conv2D(32, kernel_size=(1, 5),
-                        padding='same', activation='relu',
-                        kernel_initializer='random_normal')(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = MaxPooling2D(pool_size=(1, 2), padding='same')(output)
-        # output = Dropout(0.1)(output)
-        output = Flatten()(output)
-        return Model(inp, output)
-
-    def train_on_batch(self, x, y):
-        x = np.array(x).reshape((-1, self.num_steps, self.input_dim, 1))
-        return super().train_on_batch(x, y)
-
-    def predict(self, sample):
-        sample = np.array(sample).reshape(
-            (-1, self.num_steps, self.input_dim, 1))
         return super().predict(sample)
