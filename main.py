@@ -81,7 +81,7 @@ if __name__ == '__main__':
     # 로그, Keras Backend 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
     from agent import Agent
     from learners import DQNLearner, PolicyGradientLearner, \
-        ActorCriticLearner, A2CLearner, A3CLearner
+        ActorCriticLearner, A2CLearner
 
     # 모델 경로 준비
     value_network_path = ''
@@ -118,7 +118,7 @@ if __name__ == '__main__':
                      'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes),
                      'num_steps': args.num_steps, 'lr': args.lr, 'visualize':args.visualize,
                      'output_path': output_path, 'reuse_models': args.reuse_models}
-    print(common_params)
+
     # 강화학습 시작
     learner = None
     # Not defined Error 때문에

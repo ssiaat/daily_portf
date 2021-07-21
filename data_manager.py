@@ -299,7 +299,6 @@ def load_data_ec2(fpath, date_from, date_to, ver='v3'):
                             encoding='utf-8')
     data = pd.read_sql(sql=sql, con=engine2)
     print('----------Load Data from EC2 ')
-    print(data)
 
     if ver == 'v1':
         data.columns = ['date', 'open', 'high', 'low', 'close', 'volume']

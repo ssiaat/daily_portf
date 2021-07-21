@@ -86,31 +86,27 @@ class ReinforcementLearner:
         # 로그 등 출력 경로
         self.output_path = output_path
 
-    def init_value_network(self, shared_network=None, 
-            activation='linear', loss='mse'):
+    def init_value_network(self, activation='linear', loss='mse'):
         if self.net == 'dnn':
             self.value_network = DNN(
                 input_dim=self.num_features, 
                 output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
                 num_ticker=self.num_ticker,
                 trainable=self.trainable,
-                lr=self.lr, shared_network=shared_network, 
-                activation=activation, loss=loss)
+                lr=self.lr, activation=activation, loss=loss)
         if self.reuse_models and \
             os.path.exists(self.value_network_path):
                 self.value_network.load_model(
                     model_path=self.value_network_path)
 
-    def init_policy_network(self, shared_network=None, 
-            activation='sigmoid', loss='binary_crossentropy'):
+    def init_policy_network(self, activation='sigmoid', loss='binary_crossentropy'):
         if self.net == 'dnn':
             self.policy_network = DNN(
                 input_dim=self.num_features, 
                 output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
                 num_ticker=self.num_ticker,
                 trainable=self.trainable,
-                lr=self.lr, shared_network=shared_network, 
-                activation=activation, loss=loss)
+                lr=self.lr, activation=activation, loss=loss)
         if self.reuse_models and \
             os.path.exists(self.policy_network_path):
             self.policy_network.load_model(
@@ -270,7 +266,7 @@ class ReinforcementLearner:
             time_start_epoch = time.time()
 
             # step 샘플을 만들기 위한 큐
-            q_sample = collections.deque(maxlen=self.num_steps)
+            q_sample = collections.deque(maxlen=self.num_steps*self.num_ticker)
             
             # 환경, 에이전트, 신경망, 가시화, 메모리 초기화
             self.reset()
@@ -286,25 +282,25 @@ class ReinforcementLearner:
             while True:
                 # 샘플 생성
                 next_sample = self.build_sample()
-                print(next_sample)
-                exit()
                 if next_sample is None:
                     break
+
                 # num_steps만큼 샘플 저장
-                q_sample.append(next_sample)
-                if len(q_sample) < self.num_steps:
+                # for t in range(0, self.num_ticker * self.num_features, self.num_features):
+                #     q_sample.append(np.array(next_sample[t, t+self.num_features]))
+                for s in np.array(next_sample).reshape((self.num_ticker, -1, self.num_features)):
+                    q_sample.append(s)
+                if len(q_sample) < self.num_steps * self.num_ticker:
                     continue
 
                 # 가치, 정책 신경망 예측
                 pred_value = None
                 pred_policy = None
                 if self.value_network is not None:
-                    pred_value = self.value_network.predict(
-                        list(q_sample))
+                    pred_value = self.value_network.predict(list(q_sample))
                 if self.policy_network is not None:
-                    pred_policy = self.policy_network.predict(
-                        list(q_sample))
-                
+                    pred_policy = self.policy_network.predict(list(q_sample))
+
                 # 신경망 또는 탐험에 의한 행동 결정
                 action, confidence, exploration = \
                     self.agent.decide_action(
@@ -442,21 +438,14 @@ class PolicyGradientLearner(ReinforcementLearner):
 
 
 class ActorCriticLearner(ReinforcementLearner):
-    def __init__(self, *args, shared_network=None, 
-        value_network_path=None, policy_network_path=None, **kwargs):
+    def __init__(self, *args, value_network_path=None, policy_network_path=None, **kwargs):
         super().__init__(*args, **kwargs)
-        if shared_network is None:
-            self.shared_network = Network.get_shared_network(
-                net=self.net, num_steps=self.num_steps, 
-                input_dim=self.num_features, trainable=self.trainable)
-        else:
-            self.shared_network = shared_network
         self.value_network_path = value_network_path
         self.policy_network_path = policy_network_path
         if self.value_network is None:
-            self.init_value_network(shared_network=shared_network)
+            self.init_value_network()
         if self.policy_network is None:
-            self.init_policy_network(shared_network=shared_network)
+            self.init_policy_network()
 
     def get_batch(self, batch_size, delayed_reward, discount_factor):
         memory = zip(
@@ -511,59 +500,3 @@ class A2CLearner(ActorCriticLearner):
             value_max_next = value.max()
             reward_next = reward
         return x, y_value, y_policy
-
-
-class A3CLearner(ReinforcementLearner):
-    def __init__(self, *args, list_stock_code=None, 
-        list_chart_data=None, list_training_data=None,
-        list_min_trading_unit=None, list_max_trading_unit=None, 
-        value_network_path=None, policy_network_path=None,
-        **kwargs):
-        assert len(list_training_data) > 0
-        super().__init__(*args, **kwargs)
-        self.num_features += list_training_data[0].shape[1]
-
-        # 공유 신경망 생성
-        self.shared_network = Network.get_shared_network(
-            net=self.net, num_steps=self.num_steps, 
-            input_dim=self.num_features, trainable=self.trainable)
-        self.value_network_path = value_network_path
-        self.policy_network_path = policy_network_path
-        if self.value_network is None:
-            self.init_value_network(shared_network=self.shared_network)
-        if self.policy_network is None:
-            self.init_policy_network(shared_network=self.shared_network)
-
-        # A2CLearner 생성
-        self.learners = []
-        for (stock_code, chart_data, training_data, 
-            min_trading_unit, max_trading_unit) in zip(
-                list_stock_code, list_chart_data, list_training_data,
-                list_min_trading_unit, list_max_trading_unit
-            ):
-            learner = A2CLearner(*args, 
-                stock_code=stock_code, chart_data=chart_data, 
-                training_data=training_data,
-                min_trading_unit=min_trading_unit, 
-                max_trading_unit=max_trading_unit, 
-                shared_network=self.shared_network,
-                value_network=self.value_network,
-                policy_network=self.policy_network, **kwargs)
-            self.learners.append(learner)
-
-    def run(
-        self, num_epoches=100, balance=10000000,
-        discount_factor=0.9, start_epsilon=0.5, learning=True):
-        threads = []
-        for learner in self.learners:
-            threads.append(threading.Thread(
-                target=learner.run, daemon=True, kwargs={
-                'num_epoches': num_epoches, 'balance': balance,
-                'discount_factor': discount_factor, 
-                'start_epsilon': start_epsilon,
-                'learning': learning
-            }))
-        for thread in threads:
-            thread.start()
-            time.sleep(1)
-        for thread in threads: thread.join()

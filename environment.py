@@ -1,5 +1,4 @@
 class Environment:
-    PRICE_IDX = 1  # 종가의 위치
 
     def __init__(self, chart_data=None):
         self.chart_data = chart_data
@@ -19,7 +18,7 @@ class Environment:
 
     def get_price(self):
         if self.observation is not None:
-            return self.observation[self.PRICE_IDX]
+            return self.observation
         return None
 
     def set_chart_data(self, chart_data):
