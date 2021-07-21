@@ -75,6 +75,9 @@ class Agent:
     def reset_exploration(self):
         self.exploration_base = 0.5 + np.random.rand() / 2
 
+    def set100(self, ndary):
+        return ndary / ndary.sum()
+
     def set_balance(self, balance):
         self.initial_balance = balance
 
@@ -83,28 +86,21 @@ class Agent:
         pred = pred_policy
         if self.portfolio_value_each.sum():
             self.portf_ratio = self.portfolio_value_each / self.portfolio_value_each.sum()
-        ratio = pred - self.portf_ratio
+        # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
+        ratio = self.set100(pred * self.environment.get_vol().values - self.portf_ratio)
+        
+        # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정
         action = np.where(ratio > 0, self.ACTION_BUY, self.ACTION_SELL)
-        exit()
 
-        # 탐험 결정
+        # 탐험 여부 결정
         if np.random.rand() < epsilon:
-            exploration = True
-            if np.random.rand() < self.exploration_base:
-                action = self.ACTION_BUY
-            else:
-                action = np.random.randint(self.NUM_ACTIONS - 1) + 1
-        else:
-            exploration = False
-            action = np.argmax(pred)
+            exploration = np.random.random((self.num_ticker,)) < epsilon
+            random_action = [np.random.randint(0,2) for _ in range(self.num_ticker)]
+            action = np.where(exploration==1, random_action, action)
+            ratio = self.set100(np.where(exploration==1, ratio.mean()/2, ratio))
 
-        confidence = .5
-        if pred_policy is not None:
-            confidence = pred[action]
-        elif pred_value is not None:
-            confidence = utils.sigmoid(pred[action])
+        return action, ratio, exploration
 
-        return action, confidence, exploration
 
     def validate_action(self, action):
         if action == Agent.ACTION_BUY:
