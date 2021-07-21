@@ -93,6 +93,7 @@ class Agent:
         action = np.where(ratio > 0, self.ACTION_BUY, self.ACTION_SELL)
 
         # 탐험 여부 결정
+        exploration = [False] * self.num_ticker
         if np.random.rand() < epsilon:
             exploration = np.random.random((self.num_ticker,)) < epsilon
             random_action = [np.random.randint(0,2) for _ in range(self.num_ticker)]
