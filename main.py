@@ -33,6 +33,7 @@ if __name__ == '__main__':
     parser.add_argument('--start_epsilon', type=float, default=0.3)
     parser.add_argument('--balance', type=int, default=10000000)
     parser.add_argument('--num_epoches', type=int, default=30)
+    parser.add_argument('--hold_criter', type=float, default=0.)
     parser.add_argument('--delayed_reward_threshold',
                         type=float, default=0.05)
     parser.add_argument('--output_name', default=utils.get_time_str())
@@ -98,7 +99,7 @@ if __name__ == '__main__':
 
     # 공통 파라미터 설정
     common_params = {'rl_method': args.rl_method, 'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
-                     'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes),
+                     'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes), 'hold_criter': args.hold_criter,
                      'num_steps': args.num_steps, 'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models}
 
     # 강화학습 시작

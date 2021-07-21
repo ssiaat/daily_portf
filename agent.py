@@ -22,11 +22,12 @@ class Agent:
     NUM_ACTIONS = len(ACTIONS)  # 인공 신경망에서 고려할 출력값의 개수
 
     def __init__(
-        self, environment=None, num_ticker=10, delayed_reward_threshold=.05):
+        self, environment=None, num_ticker=10, hold_criter=0., delayed_reward_threshold=.05):
         # Environment 객체
         # 현재 주식 가격을 가져오기 위해 환경 참조
         self.environment = environment
         self.num_ticker = num_ticker
+        self.hold_criter = hold_criter
         # 지연보상 임계치
         self.delayed_reward_threshold = delayed_reward_threshold
 
@@ -35,45 +36,32 @@ class Agent:
         self.balance = 0  # 현재 현금 잔고
         self.num_stocks = np.zeros((self.num_ticker,))  # 보유 주식 수
         self.portf_ratio = np.zeros((self.num_ticker,))
-        self.base_portf_ratio = np.zeros((self.num_ticker,))
         # 포트폴리오 가치: balance + num_stocks * {현재 주식 가격}
         self.portfolio_value = 0 
         self.base_portfolio_value = 0  # 직전 학습 시점의 PV
         self.portfolio_value_each = np.zeros((self.num_ticker,))
         self.base_portfolio_value_each = np.zeros((self.num_ticker,))
 
-
-        self.num_buy = 0  # 매수 횟수
-        self.num_sell = 0  # 매도 횟수
-        self.num_hold = 0  # 홀딩 횟수
+        self.num_buy = np.zeros((self.num_ticker,))  # 매수 횟수
+        self.num_sell = np.zeros((self.num_ticker,))  # 매도 횟수
+        self.num_hold = np.zeros((self.num_ticker,))  # 홀딩 횟수
         self.immediate_reward = 0  # 즉시 보상
         self.profitloss = 0  # 현재 손익
         self.base_profitloss = 0  # 직전 지연 보상 이후 손익
-        self.exploration_base = 0  # 탐험 행동 결정 기준
-
-        # Agent 클래스의 상태
-        self.ratio_hold = 0  # 주식 보유 비율
-        self.ratio_portfolio_value = 0  # 포트폴리오 가치 비율
 
     def reset(self):
         self.balance = self.initial_balance
         self.num_stocks = np.zeros((self.num_ticker,))
         self.portf_ratio = np.zeros((self.num_ticker,))
-        self.base_portf_ratio = np.zeros((self.num_ticker,))
         self.portfolio_value = self.initial_balance
         self.base_portfolio_value = self.initial_balance
         self.portfolio_value_each = np.zeros((self.num_ticker,))
         self.base_portfolio_value_each = np.zeros((self.num_ticker,))
 
-        self.num_buy = 0
-        self.num_sell = 0
-        self.num_hold = 0
+        self.num_buy = np.zeros((self.num_ticker,))
+        self.num_sell = np.zeros((self.num_ticker,))
+        self.num_hold = np.zeros((self.num_ticker,))
         self.immediate_reward = 0
-        self.ratio_hold = 0
-        self.ratio_portfolio_value = 0
-
-    def reset_exploration(self):
-        self.exploration_base = 0.5 + np.random.rand() / 2
 
     def set100(self, ndary):
         return ndary / ndary.sum()
@@ -84,13 +72,12 @@ class Agent:
     def decide_action(self, pred_value, pred_policy, epsilon):
 
         pred = pred_policy
-        if self.portfolio_value_each.sum():
-            self.portf_ratio = self.portfolio_value_each / self.portfolio_value_each.sum()
+
         # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
-        ratio = self.set100(pred * self.environment.get_vol().values - self.portf_ratio)
-        
+        ratio = self.set100(pred * self.environment.get_vol().values)
+
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정
-        action = np.where(ratio > 0, self.ACTION_BUY, self.ACTION_SELL)
+        action = np.where(ratio > self.portf_ratio, self.ACTION_BUY, self.ACTION_SELL)
 
         # 탐험 여부 결정
         exploration = [False] * self.num_ticker
@@ -100,85 +87,36 @@ class Agent:
             action = np.where(exploration==1, random_action, action)
             ratio = self.set100(np.where(exploration==1, ratio.mean()/2, ratio))
 
+        # hold 여부 결정
+        action = np.where(abs(ratio - self.portf_ratio) < self.hold_criter, self.ACTION_HOLD, action)
+        ratio = self.set100(np.where(abs(ratio - self.portf_ratio) < self.hold_criter, self.portf_ratio, ratio))
+
+        self.num_buy += np.where(action==self.ACTION_BUY, 1, 0)
+        self.num_sell += np.where(action==self.ACTION_SELL, 1, 0)
+        self.num_hold += np.where(action == self.ACTION_HOLD, 1, 0)
+
         return action, ratio, exploration
 
+    def decide_trading_unit(self, ratio, curr_price):
+        sell_trading_unit = np.floor((self.portf_ratio - ratio).clip(10, 0) * self.portfolio_value / curr_price)
+        sell_trading_value = curr_price * sell_trading_unit
 
-    def validate_action(self, action):
-        if action == Agent.ACTION_BUY:
-            # 적어도 1주를 살 수 있는지 확인
-            if self.balance < self.environment.get_price() * (
-                1 + self.TRADING_CHARGE) * self.min_trading_unit:
-                return False
-        elif action == Agent.ACTION_SELL:
-            # 주식 잔고가 있는지 확인 
-            if self.num_stocks <= 0:
-                return False
-        return True
+        buy_trading_unit = np.floor((ratio - self.portf_ratio).clip(10, 0) * (sell_trading_value.sum() + self.balance) / curr_price)
 
-    def decide_trading_unit(self, confidence):
-        if np.isnan(confidence):
-            return self.min_trading_unit
-        added_traiding = max(min(
-            int(confidence * (self.max_trading_unit - 
-                self.min_trading_unit)),
-            self.max_trading_unit-self.min_trading_unit
-        ), 0)
-        return self.min_trading_unit + added_traiding
+        return buy_trading_unit, sell_trading_unit
 
-    def act(self, action, confidence):
-        if not self.validate_action(action):
-            action = Agent.ACTION_HOLD
-
+    def act(self, action, ratio):
         # 환경에서 현재 가격 얻기
         curr_price = self.environment.get_price()
 
         # 즉시 보상 초기화
         self.immediate_reward = 0
 
-        # 매수
-        if action == Agent.ACTION_BUY:
-            # 매수할 단위를 판단
-            trading_unit = self.decide_trading_unit(confidence)
-            balance = (
-                self.balance - curr_price * (1 + self.TRADING_CHARGE) \
-                    * trading_unit
-            )
-            # 보유 현금이 모자랄 경우 보유 현금으로 가능한 만큼 최대한 매수
-            if balance < 0:
-                trading_unit = max(
-                    min(
-                        int(self.balance / (
-                            curr_price * (1 + self.TRADING_CHARGE))),
-                        self.max_trading_unit
-                    ),
-                    self.min_trading_unit
-                )
-            # 수수료를 적용하여 총 매수 금액 산정
-            invest_amount = curr_price * (1 + self.TRADING_CHARGE) \
-                * trading_unit
-            if invest_amount > 0:
-                self.balance -= invest_amount  # 보유 현금을 갱신
-                self.num_stocks += trading_unit  # 보유 주식 수를 갱신
-                self.num_buy += 1  # 매수 횟수 증가
+        buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
+        self.balance = sell_unit * curr_price + self.balance - buy_unit * curr_price
 
-        # 매도
-        elif action == Agent.ACTION_SELL:
-            # 매도할 단위를 판단
-            trading_unit = self.decide_trading_unit(confidence)
-            # 보유 주식이 모자랄 경우 가능한 만큼 최대한 매도
-            trading_unit = min(trading_unit, self.num_stocks)
-            # 매도
-            invest_amount = curr_price * (
-                1 - (self.TRADING_TAX + self.TRADING_CHARGE)) \
-                    * trading_unit
-            if invest_amount > 0:
-                self.num_stocks -= trading_unit  # 보유 주식 수를 갱신
-                self.balance += invest_amount  # 보유 현금을 갱신
-                self.num_sell += 1  # 매도 횟수 증가
+        # 횟수 갱신
 
-        # 홀딩
-        elif action == Agent.ACTION_HOLD:
-            self.num_hold += 1  # 홀딩 횟수 증가
 
         # 포트폴리오 가치 갱신
         self.portfolio_value = self.balance + curr_price \

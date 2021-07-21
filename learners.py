@@ -18,7 +18,7 @@ class ReinforcementLearner:
 
     def __init__(self, rl_method='rl', trainable=False,
                 price_data=None, vol_data=None, training_data=None,
-                delayed_reward_threshold=.05,
+                hold_criter=0., delayed_reward_threshold=.05,
                 num_ticker=100, num_features=7, num_steps=1, lr=0.001,
                 value_network=None, policy_network=None,
                 output_path='', reuse_models=True):
@@ -33,7 +33,7 @@ class ReinforcementLearner:
         self.price_data = price_data
         self.environment = Environment(price_data, vol_data)
         # 에이전트 설정
-        self.agent = Agent(self.environment, num_ticker=num_ticker,
+        self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter,
                     delayed_reward_threshold=delayed_reward_threshold)
         # 학습 데이터
         self.training_data = training_data
@@ -194,7 +194,6 @@ class ReinforcementLearner:
             if learning:
                 epsilon = start_epsilon \
                     * (1. - float(epoch) / (num_epoches - 1))
-                self.agent.reset_exploration()
             else:
                 epsilon = start_epsilon
 
@@ -221,13 +220,13 @@ class ReinforcementLearner:
                     pred_policy = self.policy_network.predict(list(q_sample))
 
                 # 신경망 또는 탐험에 의한 행동 결정
-                action, confidence, exploration = \
+                action, ratio, exploration = \
                     self.agent.decide_action(
                         pred_value, pred_policy, epsilon)
 
                 # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
                 immediate_reward, delayed_reward = \
-                    self.agent.act(action, confidence)
+                    self.agent.act(action, ratio)
 
                 # 행동 및 행동에 대한 결과를 기억
                 self.memory_sample.append(list(q_sample))

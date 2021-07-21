@@ -82,8 +82,22 @@ def preprocessing(data):
         data[col] = (data[col] - min_num) / (max_num - min_num)
     return data
 
-def transformation(data, ver='v1'):
-    windows = [5, 10, 20, 60, 120]
+## 특성에서  zscore 만들기
+def zscore(x, window):
+    r = x.rolling(window=window)
+    m = r.mean().shift(1)
+    s = r.std(ddof=0).shift(1)
+    z = (x-m)/s
+    return z
+
+def transformation_yh(data, ver='v3'):
+    ## 모든 기존특성들 대해서  zscore 추가
+    cols = data.columns.tolist()
+    for col in cols:
+        data[f'zscore_{col}'] = zscore(data[col], window = 20)
+        # 마지막날의  최근 20일 기준  z_score
+
+    windows = [5, 20]
     for window in windows:
         data['close_ma{}'.format(window)] = \
             data['close'].rolling(window).mean()
@@ -96,32 +110,17 @@ def transformation(data, ver='v1'):
             (data['volume'] - data['volume_ma%d' % window]) \
             / data['volume_ma%d' % window]
 
-        if ver == 'v1.rich':
-            data['inst_ma{}'.format(window)] = \
-                data['close'].rolling(window).mean()
-            data['frgn_ma{}'.format(window)] = \
-                data['volume'].rolling(window).mean()
-            data['inst_ma%d_ratio' % window] = \
-                (data['close'] - data['inst_ma%d' % window]) \
-                / data['inst_ma%d' % window]
-            data['frgn_ma%d_ratio' % window] = \
-                (data['volume'] - data['frgn_ma%d' % window]) \
-                / data['frgn_ma%d' % window]
-
+    # 전날종가 ~ 다음날 오픈 : 미국장 반영 효과
     data['open_lastclose_ratio'] = np.zeros(len(data))
     data.loc[1:, 'open_lastclose_ratio'] = \
         (data['open'][1:].values - data['close'][:-1].values) \
         / data['close'][:-1].values
-    data['high_close_ratio'] = \
-        (data['high'].values - data['close'].values) \
-        / data['close'].values
-    data['low_close_ratio'] = \
-        (data['low'].values - data['close'].values) \
-        / data['close'].values
-    data['close_lastclose_ratio'] = np.zeros(len(data))
-    data.loc[1:, 'close_lastclose_ratio'] = \
-        (data['close'][1:].values - data['close'][:-1].values) \
-        / data['close'][:-1].values
+
+    # 하루의 변동폭 range
+    data['high_low_ratio'] = \
+        data['high'].values \
+        / data['low'].values
+
     data['volume_lastvolume_ratio'] = np.zeros(len(data))
     data.loc[1:, 'volume_lastvolume_ratio'] = \
         (data['volume'][1:].values - data['volume'][:-1].values) \
@@ -129,21 +128,13 @@ def transformation(data, ver='v1'):
             .replace(to_replace=0, method='ffill') \
             .replace(to_replace=0, method='bfill').values
 
-    if ver == 'v1.rich':
-        data['inst_lastinst_ratio'] = np.zeros(len(data))
-        data.loc[1:, 'inst_lastinst_ratio'] = \
-            (data['inst'][1:].values - data['inst'][:-1].values) \
-            / data['inst'][:-1] \
-                .replace(to_replace=0, method='ffill') \
-                .replace(to_replace=0, method='bfill').values
-        data['frgn_lastfrgn_ratio'] = np.zeros(len(data))
-        data.loc[1:, 'frgn_lastfrgn_ratio'] = \
-            (data['frgn'][1:].values - data['frgn'][:-1].values) \
-            / data['frgn'][:-1] \
-                .replace(to_replace=0, method='ffill') \
-                .replace(to_replace=0, method='bfill').values
+    ## zscore 최초 20일  Nan 되어있음
+    data = data.fillna(0)
+    ## 마지막에  전체 data 대해서  MinMaxScaler ?
 
     return data
+
+
 
 
 ## 기본 ver = v2
@@ -159,7 +150,8 @@ def load_data(fpath, date_from, date_to, ver='v3'):
     data = data.sort_values(by='date').reset_index()
 
     # 데이터 전처리
-    data = transformation(data)
+    #data = transformation(data)
+    data = transformation_yh(data)
 
     # 기간 필터링
     data['date'] = data['date'].str.replace('-', '')
@@ -238,7 +230,7 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
 
     # 데이터 전처리
     if ver!= 'v3':
-        data = transformation(data)
+        data = transformation_yh(data)
 
 
     # 기간 필터링
@@ -289,7 +281,6 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
         raise Exception('Invalid version.')
 
     return price_data, vol_data, training_data
-
 
 from sqlalchemy import create_engine
 
@@ -373,4 +364,3 @@ def load_data_ec2(fpath, date_from, date_to, ver='v3'):
         raise Exception('Invalid version.')
 
     return chart_data, training_data
-
