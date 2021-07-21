@@ -26,9 +26,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--ver', choices=['v1', 'v2', 'v3', 'v4'], default='v3')
     parser.add_argument('--rl_method',
-                        choices=['dqn', 'pg', 'ac', 'a2c'], default='a2c')
-    # parser.add_argument('--net',
-    #                     choices=['dnn', 'lstm', 'cnn'], default=model_name)
+                        choices=['ac', 'a2c'], default='a2c')
     parser.add_argument('--num_steps', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--discount_factor', type=float, default=0.9)
@@ -37,24 +35,17 @@ if __name__ == '__main__':
     parser.add_argument('--num_epoches', type=int, default=30)
     parser.add_argument('--delayed_reward_threshold',
                         type=float, default=0.05)
-    parser.add_argument('--backend',
-                        choices=['tensorflow', 'plaidml'], default='tensorflow')
     parser.add_argument('--output_name', default=utils.get_time_str())
-    # f'{model_name}_value_15'   f'{model_name}_policy_15'
     parser.add_argument('--value_network_name', default=value_name)
     parser.add_argument('--policy_network_name', default=policy_name)
     parser.add_argument('--reuse_models', action='store_true')
     parser.add_argument('--learning', action='store_true')
-    parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--start_date', default=start_date)
     parser.add_argument('--end_date', default=end_date)
     args = parser.parse_args()
 
     # Keras Backend 설정
-    if args.backend == 'tensorflow':
-        os.environ['KERAS_BACKEND'] = 'tensorflow'
-    elif args.backend == 'plaidml':
-        os.environ['KERAS_BACKEND'] = 'plaidml.keras.backend'
+    os.environ['KERAS_BACKEND'] = 'tensorflow'
 
     # 출력 경로 설정
     output_path = os.path.join(settings.BASE_DIR, 'output/{}_{}'.format(args.output_name, args.rl_method))
@@ -79,9 +70,7 @@ if __name__ == '__main__':
         print('-----------------this running is for testing')
 
     # 로그, Keras Backend 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
-    from agent import Agent
-    from learners import DQNLearner, PolicyGradientLearner, \
-        ActorCriticLearner, A2CLearner
+    from learners import ActorCriticLearner, A2CLearner
 
     # 모델 경로 준비
     value_network_path = ''
@@ -101,37 +90,24 @@ if __name__ == '__main__':
             output_path, '{}_{}_policy.h5'.format(
                 args.rl_method, args.output_name))
 
-    list_stock_code = []
-    list_chart_data = []
-    list_training_data = []
-    list_min_trading_unit = []
-    list_max_trading_unit = []
-
     #-----------------------
     # 학습은 삼성전자부터 마지막 ticker, 마지막 ticker부터 삼성전자 순서로 진행함
     #-----------------------
     stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)[:2]
-    chart_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
+    price_data, vol_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
 
     # 공통 파라미터 설정
     common_params = {'rl_method': args.rl_method, 'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
                      'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes),
-                     'num_steps': args.num_steps, 'lr': args.lr, 'visualize':args.visualize,
-                     'output_path': output_path, 'reuse_models': args.reuse_models}
+                     'num_steps': args.num_steps, 'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models}
 
     # 강화학습 시작
     learner = None
     # Not defined Error 때문에
 
-    common_params.update({'chart_data': chart_data,
+    common_params.update({'price_data': price_data, 'vol_data': vol_data,
                           'training_data': training_data})
-    if args.rl_method == 'dqn':
-        learner = DQNLearner(**{**common_params,
-                                'value_network_path': value_network_path})
-    elif args.rl_method == 'pg':
-        learner = PolicyGradientLearner(**{**common_params,
-                                           'policy_network_path': policy_network_path})
-    elif args.rl_method == 'ac':
+    if args.rl_method == 'ac':
         learner = ActorCriticLearner(**{**common_params,
                                         'value_network_path': value_network_path,
                                         'policy_network_path': policy_network_path})

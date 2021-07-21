@@ -204,17 +204,22 @@ def load_data(fpath, date_from, date_to, ver='v3'):
 
 def make_data(stock_codes, start_date, end_date):
     training_df = pd.DataFrame()
-    chart_df = pd.DataFrame()
+    price_df = pd.DataFrame()
+    vol_df = pd.DataFrame()
     for stock_code in stock_codes:
         # From local db,. 한종목씩
-        chart_data, training_data = load_data_sql(
-            stock_code, start_date, end_date)  ## 인자 1 ## 인자 2, 3
+        price_data, vol_data, training_data = load_data_sql(stock_code, start_date, end_date)  ## 인자 1 ## 인자 2, 3
         # columns
         # cols = [학습대상 특성들]
         # df_unit = df_unit[cols]
         training_df = pd.concat([training_df, training_data] , axis=1)  ## 옆으로 늘어뜨려붙이기
-        chart_df = pd.concat([chart_df, chart_data])
-    return chart_df, training_df
+        price_df = pd.concat([price_df, price_data], axis=1)
+        vol_df = pd.concat([vol_df, vol_data], axis=1)
+    price_df.columns = stock_codes
+    vol_df.columns = stock_codes
+    vol_df = (vol_df.T / vol_df.sum(axis=1)).T
+
+    return price_df, vol_df, training_df
 
 
 
@@ -245,10 +250,11 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     # processing nan
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date].reset_index().fillna(0)
-    # data = data[(data['date'] >= date_from) & (data['date'] <= date_to)]
+    data = data[(data['date'] >= date_from) & (data['date'] <= date_to)]
 
     # 차트 데이터 분리
-    chart_data = data[['date', 'price_mod']].set_index('date')
+    price_data = data[['date', 'price_mod']].set_index('date')
+    vol_data = data[['date', 'volume']].set_index('date')
 
     # 학습 데이터 분리
     training_data = None
@@ -282,7 +288,7 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     else:
         raise Exception('Invalid version.')
 
-    return chart_data, training_data
+    return price_data, vol_data, training_data
 
 
 from sqlalchemy import create_engine

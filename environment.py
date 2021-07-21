@@ -1,25 +1,29 @@
 class Environment:
 
-    def __init__(self, chart_data=None):
-        self.chart_data = chart_data
-        self.observation = None
+    def __init__(self, price_data=None, vol_data=None):
+        self.price_data = price_data
+        self.vol_data = vol_data
+        self.observ_price = price_data
+        self.observ_vol = vol_data
         self.idx = -1
 
     def reset(self):
-        self.observation = None
         self.idx = -1
 
     def observe(self):
-        if len(self.chart_data) > self.idx + 1:
+        if len(self.price_data) > self.idx + 1:
             self.idx += 1
-            self.observation = self.chart_data.iloc[self.idx]
-            return self.observation
+            self.observ_price = self.price_data.iloc[self.idx]
+            self.observ_vol = self.vol_data.iloc[self.idx]
+            return self.observ_price
         return None
 
     def get_price(self):
-        if self.observation is not None:
-            return self.observation
+        if self.observ_price is not None:
+            return self.observ_price
         return None
 
-    def set_chart_data(self, chart_data):
-        self.chart_data = chart_data
+    def get_vol(self):
+        if self.observ_vol is not None:
+            return self.observ_vol
+        return None

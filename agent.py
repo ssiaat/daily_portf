@@ -22,25 +22,27 @@ class Agent:
     NUM_ACTIONS = len(ACTIONS)  # 인공 신경망에서 고려할 출력값의 개수
 
     def __init__(
-        self, environment=None, min_trading_unit=1, max_trading_unit=2,
-        delayed_reward_threshold=.05):
+        self, environment=None, num_ticker=10, delayed_reward_threshold=.05):
         # Environment 객체
         # 현재 주식 가격을 가져오기 위해 환경 참조
         self.environment = environment
-
-        # 최소 매매 단위, 최대 매매 단위, 지연보상 임계치
-        self.min_trading_unit = min_trading_unit  # 최소 단일 거래 단위
-        self.max_trading_unit = max_trading_unit  # 최대 단일 거래 단위
+        self.num_ticker = num_ticker
         # 지연보상 임계치
         self.delayed_reward_threshold = delayed_reward_threshold
 
         # Agent 클래스의 속성
         self.initial_balance = 0  # 초기 자본금
         self.balance = 0  # 현재 현금 잔고
-        self.num_stocks = 0  # 보유 주식 수
+        self.num_stocks = np.zeros((self.num_ticker,))  # 보유 주식 수
+        self.portf_ratio = np.zeros((self.num_ticker,))
+        self.base_portf_ratio = np.zeros((self.num_ticker,))
         # 포트폴리오 가치: balance + num_stocks * {현재 주식 가격}
         self.portfolio_value = 0 
         self.base_portfolio_value = 0  # 직전 학습 시점의 PV
+        self.portfolio_value_each = np.zeros((self.num_ticker,))
+        self.base_portfolio_value_each = np.zeros((self.num_ticker,))
+
+
         self.num_buy = 0  # 매수 횟수
         self.num_sell = 0  # 매도 횟수
         self.num_hold = 0  # 홀딩 횟수
@@ -55,9 +57,14 @@ class Agent:
 
     def reset(self):
         self.balance = self.initial_balance
-        self.num_stocks = 0
+        self.num_stocks = np.zeros((self.num_ticker,))
+        self.portf_ratio = np.zeros((self.num_ticker,))
+        self.base_portf_ratio = np.zeros((self.num_ticker,))
         self.portfolio_value = self.initial_balance
         self.base_portfolio_value = self.initial_balance
+        self.portfolio_value_each = np.zeros((self.num_ticker,))
+        self.base_portfolio_value_each = np.zeros((self.num_ticker,))
+
         self.num_buy = 0
         self.num_sell = 0
         self.num_hold = 0
@@ -71,32 +78,14 @@ class Agent:
     def set_balance(self, balance):
         self.initial_balance = balance
 
-    def get_states(self):
-        self.ratio_hold = self.num_stocks / int(
-            self.portfolio_value / self.environment.get_price())
-        self.ratio_portfolio_value = (
-            self.portfolio_value / self.base_portfolio_value
-        )
-        return (
-            self.ratio_hold,
-            self.ratio_portfolio_value
-        )
-
     def decide_action(self, pred_value, pred_policy, epsilon):
-        confidence = 0.
 
         pred = pred_policy
-        if pred is None:
-            pred = pred_value
-
-        if pred is None:
-            # 예측 값이 없을 경우 탐험
-            epsilon = 1
-        else:
-            # 값이 모두 같은 경우 탐험
-            maxpred = np.max(pred)
-            if (pred == maxpred).all():
-                epsilon = 1
+        if self.portfolio_value_each.sum():
+            self.portf_ratio = self.portfolio_value_each / self.portfolio_value_each.sum()
+        ratio = pred - self.portf_ratio
+        action = np.where(ratio > 0, self.ACTION_BUY, self.ACTION_SELL)
+        exit()
 
         # 탐험 결정
         if np.random.rand() < epsilon:
