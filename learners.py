@@ -17,7 +17,7 @@ class ReinforcementLearner:
     lock = threading.Lock()
 
     def __init__(self, trainable=False,
-                price_data=None, vol_data=None, ks_data=None, training_data=None,
+                price_data=None, cap_data=None, ks_data=None, training_data=None,
                 hold_criter=0., delayed_reward_threshold=.05,
                 num_ticker=100, num_features=7, lr=0.001,
                 value_network=None, policy_network=None,
@@ -29,7 +29,7 @@ class ReinforcementLearner:
         self.trainable = trainable
         # 환경 설정
         self.price_data = price_data
-        self.environment = Environment(price_data, vol_data, ks_data)
+        self.environment = Environment(price_data, cap_data, ks_data)
 
         # 에이전트 설정
         self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter,
@@ -200,13 +200,13 @@ class ReinforcementLearner:
                     # 가치, 정책 신경망 예측
                     pred_value = None
                     pred_policy = None
-                    curr_vol = self.environment.get_vol()
-                    curr_vol_value = np.tile(curr_vol.reshape(-1, 1), 2).reshape(-1,)
+                    curr_cap = self.environment.get_cap()
+                    curr_cap_value = np.tile(curr_cap.reshape(-1, 1), 2).reshape(-1,)
 
                     if self.value_network is not None:
-                        pred_value = self.value_network.predict(next_sample) * curr_vol_value
+                        pred_value = self.value_network.predict(next_sample) * curr_cap_value
                     if self.policy_network is not None:
-                        pred_policy = self.policy_network.predict(next_sample) * curr_vol
+                        pred_policy = self.policy_network.predict(next_sample) * curr_cap
 
                     # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                     self.agent.renewal_portfolio_ratio()

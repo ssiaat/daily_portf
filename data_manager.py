@@ -10,69 +10,20 @@ curs = conn.cursor()
 # ks200 데이터는 따로 받아옴
 sql = f"SELECT * FROM ks200 ORDER BY ks200.date ASC;"
 ks200 = pd.read_sql(sql=sql, con=conn).set_index('date')
+capital = pd.read_csv('data/capital.csv', index_col='date', parse_dates=True)
 
 # v4 version
 COLUMNS_CHART_DATA = ['date', 'price_mod', 'open', 'high', 'low', 'close', 'volume']
+COLUMNS_TRAINING_DATA_V3 = ['volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'ks200', 'target']
 
-COLUMNS_TRAINING_DATA_V1 = [
-    'open_lastclose_ratio', 'high_close_ratio', 'low_close_ratio',
-    'close_lastclose_ratio', 'volume_lastvolume_ratio',
-    'close_ma5_ratio', 'volume_ma5_ratio',
-    'close_ma10_ratio', 'volume_ma10_ratio',
-    'close_ma20_ratio', 'volume_ma20_ratio',
-    'close_ma60_ratio', 'volume_ma60_ratio',
-    'close_ma120_ratio', 'volume_ma120_ratio',
-]
 
-COLUMNS_TRAINING_DATA_V1_RICH = [
-    'open_lastclose_ratio', 'high_close_ratio', 'low_close_ratio',
-    'close_lastclose_ratio', 'volume_lastvolume_ratio',
-    'close_ma5_ratio', 'volume_ma5_ratio',
-    'close_ma10_ratio', 'volume_ma10_ratio',
-    'close_ma20_ratio', 'volume_ma20_ratio',
-    'close_ma60_ratio', 'volume_ma60_ratio',
-    'close_ma120_ratio', 'volume_ma120_ratio',
-    'inst_lastinst_ratio', 'frgn_lastfrgn_ratio',
-    'inst_ma5_ratio', 'frgn_ma5_ratio',
-    'inst_ma10_ratio', 'frgn_ma10_ratio',
-    'inst_ma20_ratio', 'frgn_ma20_ratio',
-    'inst_ma60_ratio', 'frgn_ma60_ratio',
-    'inst_ma120_ratio', 'frgn_ma120_ratio',
-]
 
-COLUMNS_TRAINING_DATA_V2 = [
-    'per', 'pbr', 'roe',
-    'open_lastclose_ratio', 'high_close_ratio', 'low_close_ratio',
-    'close_lastclose_ratio', 'volume_lastvolume_ratio',
-    'close_ma5_ratio', 'volume_ma5_ratio',
-    'close_ma10_ratio', 'volume_ma10_ratio',
-    'close_ma20_ratio', 'volume_ma20_ratio',
-    'close_ma60_ratio', 'volume_ma60_ratio',
-    'close_ma120_ratio', 'volume_ma120_ratio',
-    'market_kospi_ma5_ratio', 'market_kospi_ma20_ratio',
-    'market_kospi_ma60_ratio', 'market_kospi_ma120_ratio',
-    'bond_k3y_ma5_ratio', 'bond_k3y_ma20_ratio',
-    'bond_k3y_ma60_ratio', 'bond_k3y_ma120_ratio'
-]
+# 마지막 시점 기준 시총 상위 n개 ticker 가져옴
+def get_stock_codes(n):
+    stock_codes = capital.iloc[-1].dropna().sort_values(ascending=False).index[:n]
+    stock_codes = [i[1:] for i in stock_codes]
+    return stock_codes
 
-numsearch_on = 0
-
-if numsearch_on == 1:
-    # 'netbuy_foreign',
-    COLUMNS_TRAINING_DATA_V3 = [
-        'volume', 'num_search', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'ks200', 'target'
-    ]
-elif numsearch_on == 0:
-    COLUMNS_TRAINING_DATA_V3 = [
-        'volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'ks200', 'target'
-    ]
-
-COLUMNS_TRAINING_DATA_V4 = [
-    'volume', 'num_search', 'short_amount', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'ks200',
-    'target'
-]
-
-# v3에서만 실행
 # parameter 초기화를 he_normal
 # input의 범위도 비슷하게 맞춰줌
 def preprocessing(data):
@@ -90,7 +41,7 @@ def zscore(x, window):
     z = (x-m)/s
     return z
 
-def transformation_yh(data, ver='v3'):
+def transformation(data, ver='v3'):
     ## 모든 기존특성들 대해서  zscore 추가
     cols = data.columns.tolist()
     for col in cols:
@@ -135,65 +86,6 @@ def transformation_yh(data, ver='v3'):
     return data
 
 
-
-
-## 기본 ver = v2
-def load_data(fpath, date_from, date_to, ver='v3'):
-    header = None if ver == 'v1' else 0
-    data = pd.read_csv(fpath, thousands=',', header=header,
-                       converters={'date': lambda x: str(x)})
-
-    if ver == 'v1':
-        data.columns = ['date', 'open', 'high', 'low', 'close', 'volume']
-
-    # 날짜 오름차순 정렬
-    data = data.sort_values(by='date').reset_index()
-
-    # 데이터 전처리
-    #data = transformation(data)
-    data = transformation_yh(data)
-
-    # 기간 필터링
-    data['date'] = data['date'].str.replace('-', '')
-    data = data[(data['date'] >= date_from) & (data['date'] <= date_to)]
-    data = data.dropna()
-
-    # 차트 데이터 분리
-    chart_data = data[COLUMNS_CHART_DATA]
-
-    # 학습 데이터 분리
-    training_data = None
-    if ver == 'v1':
-        training_data = data[COLUMNS_TRAINING_DATA_V1]
-    elif ver == 'v1.rich':
-        training_data = data[COLUMNS_TRAINING_DATA_V1_RICH]
-    elif ver == 'v2':
-        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
-        # data.loc[:, ['per', 'pbr', 'roe']] = \
-        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
-        training_data = data[COLUMNS_TRAINING_DATA_V3]
-        training_data = training_data.apply(np.tanh)
-    elif ver == 'v3':
-        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
-        # data.loc[:, ['per', 'pbr', 'roe']] = \
-        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
-        training_data = data[COLUMNS_TRAINING_DATA_V3]
-        training_data = training_data.apply(np.tanh)
-    elif ver == 'v4':
-        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
-        # data.loc[:, ['per', 'pbr', 'roe']] = \
-        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
-        training_data = data[COLUMNS_TRAINING_DATA_V4]
-        training_data = training_data.apply(np.tanh)
-
-    else:
-        raise Exception('Invalid version.')
-
-    return chart_data, training_data
-
-
-## 여기서 읽어온것 다 합쳐야함
-
 def make_data(stock_codes, start_date, end_date):
     training_df = pd.DataFrame()
     price_df = pd.DataFrame()
@@ -217,7 +109,6 @@ def make_data(stock_codes, start_date, end_date):
 
 
 
-## 기본 ver = v2
 # load_data_sql 한종목을 읽어오는것.
 def load_data_sql(fpath, date_from, date_to, ver='v3'):
     header = None if ver == 'v1' else 0
@@ -229,11 +120,6 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     data = pd.read_sql(sql=sql, con=conn)
     data['ks200'] = ks200.kospi.values
 
-
-    # 데이터 전처리
-    if ver!= 'v3':
-        data = transformation_yh(data)
-
     # processing nan
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date].reset_index().fillna(0)
@@ -244,36 +130,9 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     vol_data = data[['date', 'volume']].set_index('date')
 
     # 학습 데이터 분리
-    training_data = None
-    if ver == 'v1':
-        training_data = data[COLUMNS_TRAINING_DATA_V1]
-    elif ver == 'v1.rich':
-        training_data = data[COLUMNS_TRAINING_DATA_V1_RICH]
-    elif ver == 'v2':
-        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
-        # data.loc[:, ['per', 'pbr', 'roe']] = \
-        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
-        training_data = data[COLUMNS_TRAINING_DATA_V3]
-        training_data = training_data.apply(np.tanh)
-    elif ver == 'v3':
-        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
-        # data.loc[:, ['per', 'pbr', 'roe']] = \
-        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
-        training_data = data[COLUMNS_TRAINING_DATA_V3]
-        training_data = training_data.astype(float)
-        training_data = preprocessing(training_data)
-
-        training_data = training_data.apply(np.tanh)
-    elif ver == 'v4':
-        # v2 폴더내에서,  해당 종목파일명의 csv 파일에서 ,  선택한 Feature. 만 전처리
-        # data.loc[:, ['per', 'pbr', 'roe']] = \
-        #     data[['per', 'pbr', 'roe']].apply(lambda x: x / 100)
-        training_data = data[COLUMNS_TRAINING_DATA_V4]
-        training_data = training_data.astype(float)
-        training_data = training_data.apply(np.tanh)
-
-    else:
-        raise Exception('Invalid version.')
+    training_data = data[COLUMNS_TRAINING_DATA_V3]
+    training_data = training_data.astype(float)
+    training_data = preprocessing(training_data)
 
     return price_data, vol_data, training_data
 

@@ -19,12 +19,12 @@ model_name = 'dnn'
 value_name = None
 policy_name = None
 start_date = '20000201'
-end_date = '20001229'
+end_date = '20201230'
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ver', choices=['v1', 'v2', 'v3', 'v4'], default='v3')
+    parser.add_argument('--num_stocks', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
@@ -85,11 +85,9 @@ if __name__ == '__main__':
         policy_network_path = os.path.join(
             output_path, '{}_policy.h5'.format(args.output_name))
 
-    #-----------------------
-    # 학습은 삼성전자부터 마지막 ticker, 마지막 ticker부터 삼성전자 순서로 진행함
-    #-----------------------
-    stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)[:5]
-    price_data, vol_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
+    # 포트폴리오 구성 ticker정하고 데이터 불러옴
+    stock_codes = data_manager.get_stock_codes(args.num_stocks)
+    price_data, cap_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
 
     # 공통 파라미터 설정
     common_params = {'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
@@ -97,7 +95,7 @@ if __name__ == '__main__':
                      'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models}
 
     # 강화학습 시작
-    common_params.update({'price_data': price_data, 'vol_data': vol_data,
+    common_params.update({'price_data': price_data, 'cap_data': cap_data,
                           'ks_data' : ks_data, 'training_data': training_data})
 
     learner = A2CLearner(**{**common_params, 'value_network_path': value_network_path, 'policy_network_path': policy_network_path})
