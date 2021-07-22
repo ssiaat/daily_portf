@@ -1,10 +1,12 @@
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.layers import Dense
-# from agent import *
-# agent = Agent()
 
-a = np.array([10,3, 0])
-print(np.where(a==0, 1, a))
-b = np.array([5,4])
-print(a.clip(0,b))
+def sigmoid(x):
+    return 1. / (1. + np.exp(-x))
+
+a = np.array([[[[1,2,3,4]],[[5,6,7,8]]], [[[9,10,11,12]],[[13,14,15,16]]], [[[17,18,19,20]],[[21,22,23,24]]]])
+
+a = a.swapaxes(0,1)
+a = np.split(a, 2, axis=0)
+
+print(a[0].shape)
+# print([a[:].shape])

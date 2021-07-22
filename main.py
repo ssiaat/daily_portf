@@ -25,9 +25,6 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ver', choices=['v1', 'v2', 'v3', 'v4'], default='v3')
-    parser.add_argument('--rl_method',
-                        choices=['ac', 'a2c'], default='a2c')
-    parser.add_argument('--num_steps', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
@@ -48,7 +45,7 @@ if __name__ == '__main__':
     os.environ['KERAS_BACKEND'] = 'tensorflow'
 
     # 출력 경로 설정
-    output_path = os.path.join(settings.BASE_DIR, 'output/{}_{}'.format(args.output_name, args.rl_method))
+    output_path = os.path.join(settings.BASE_DIR, 'output/{}'.format(args.output_name))
     if not os.path.isdir(output_path):
         os.makedirs(output_path)
 
@@ -70,7 +67,7 @@ if __name__ == '__main__':
         print('-----------------this running is for testing')
 
     # 로그, Keras Backend 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
-    from learners import ActorCriticLearner, A2CLearner
+    from learners import A2CLearner
 
     # 모델 경로 준비
     value_network_path = ''
@@ -80,15 +77,13 @@ if __name__ == '__main__':
                                           'models/{}.h5'.format(args.value_network_name))
     else:
         value_network_path = os.path.join(
-            output_path, '{}_{}_value.h5'.format(
-                args.rl_method, args.output_name))
+            output_path, '{}_value.h5'.format(args.output_name))
     if args.policy_network_name is not None:
         policy_network_path = os.path.join(settings.BASE_DIR,
                                            'models/{}.h5'.format(args.policy_network_name))
     else:
         policy_network_path = os.path.join(
-            output_path, '{}_{}_policy.h5'.format(
-                args.rl_method, args.output_name))
+            output_path, '{}_policy.h5'.format(args.output_name))
 
     #-----------------------
     # 학습은 삼성전자부터 마지막 ticker, 마지막 ticker부터 삼성전자 순서로 진행함
@@ -97,24 +92,15 @@ if __name__ == '__main__':
     price_data, vol_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
 
     # 공통 파라미터 설정
-    common_params = {'rl_method': args.rl_method, 'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
+    common_params = {'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
                      'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes), 'hold_criter': args.hold_criter,
-                     'num_steps': args.num_steps, 'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models}
+                     'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models}
 
     # 강화학습 시작
-    learner = None
-    # Not defined Error 때문에
-
     common_params.update({'price_data': price_data, 'vol_data': vol_data,
                           'ks_data' : ks_data, 'training_data': training_data})
-    if args.rl_method == 'ac':
-        learner = ActorCriticLearner(**{**common_params,
-                                        'value_network_path': value_network_path,
-                                        'policy_network_path': policy_network_path})
-    elif args.rl_method == 'a2c':
-        learner = A2CLearner(**{**common_params,
-                                'value_network_path': value_network_path,
-                                'policy_network_path': policy_network_path})
+
+    learner = A2CLearner(**{**common_params, 'value_network_path': value_network_path, 'policy_network_path': policy_network_path})
     if learner is not None:
         learner.run(balance=args.balance,
                     num_epoches=args.num_epoches,

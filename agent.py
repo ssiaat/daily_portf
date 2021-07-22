@@ -68,8 +68,8 @@ class Agent:
         self.base_ks = self.environment.get_ks_to_reset()
         self.win_cnt = 0
 
-    def set100(self, ndary):
-        return ndary / ndary.sum()
+    def set100(self, tensor):
+        return tensor / tensor.sum()
 
     def set_balance(self, balance):
         self.initial_balance = balance
@@ -81,12 +81,10 @@ class Agent:
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = self.portfolio_value_each.sum() + self.balance
 
-    def decide_action(self, pred_value, pred_policy, epsilon):
-
-        pred = pred_policy
+    def decide_action(self, pred_policy, epsilon):
 
         # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
-        ratio = self.set100(pred * self.environment.get_vol())
+        ratio = self.set100(pred_policy)
 
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정
         action = np.where(ratio > self.portfolio_ratio, self.ACTION_BUY, self.ACTION_SELL)
@@ -144,7 +142,7 @@ class Agent:
             self.win_cnt += 1
 
         # 즉시 보상 - ks200 대비 아웃퍼폼 / 값이 너무 작아질까 우려되어 * 10
-        self.immediate_reward = self.profitloss
+        self.immediate_reward = self.profitloss * self.portfolio_ratio
 
         # 지연 보상 - 익절, 손절 기준
         delayed_reward = 0
@@ -155,6 +153,6 @@ class Agent:
             self.base_ks = ks_now
             delayed_reward = self.immediate_reward
         else:
-            delayed_reward = 0
+            delayed_reward = np.zeros((self.num_ticker,))
 
         return self.immediate_reward, delayed_reward
