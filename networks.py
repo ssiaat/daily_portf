@@ -4,9 +4,9 @@ import threading
 print('----------------Keras Backend : ')
 print(os.environ['KERAS_BACKEND'])
 
-from keras.models import Model, Sequential
+from keras.models import Model
 from keras.layers import Dense,BatchNormalization, concatenate
-from tensorflow.keras.initializers import he_uniform
+from tensorflow.keras.initializers import he_uniform, he_normal
 from tensorflow.keras.optimizers import SGD, Adam
 from keras import Input
 import tensorflow as tf
@@ -21,7 +21,7 @@ class Network:
         self.trainable = trainable
         self.loss = loss
         self.model = None
-        self.initializer = he_uniform()
+        self.initializer = he_normal()
         self.activation = 'relu'
         self.activation_last = activation
         self.optimizer = Adam(lr)

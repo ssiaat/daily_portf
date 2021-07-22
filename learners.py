@@ -233,10 +233,9 @@ class ReinforcementLearner:
                     self.itr_cnt += 1
 
                     # 지연 보상 발생된 경우 미니 배치 학습
-                    if learning and (delayed_reward.sum() != 0):
+                    if learning and (tf.reduce_sum(delayed_reward) != 0):
                         self.fit(delayed_reward, discount_factor)
 
-            print('finish epochs')
             # 에포크 종료 후 학습
             if learning:
                 self.fit(self.agent.profitloss * self.agent.portfolio_ratio, discount_factor, full=True)
@@ -306,9 +305,9 @@ class A2CLearner(ReinforcementLearner):
             x[i] = np.array(sample)
             r = (delayed_reward + reward_next - reward * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next
-            advantage = value[action] - value.reshape(-1, 2).mean(axis=1)
+            advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
             y_policy[i] = sigmoid(advantage)
-            value_max_next = value.reshape(-1, 2).max(axis=1)
+            value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
             reward_next = reward
 
         # input 형태로 변경

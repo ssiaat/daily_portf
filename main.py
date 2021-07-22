@@ -88,7 +88,7 @@ if __name__ == '__main__':
     #-----------------------
     # 학습은 삼성전자부터 마지막 ticker, 마지막 ticker부터 삼성전자 순서로 진행함
     #-----------------------
-    stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)[:2]
+    stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)[:5]
     price_data, vol_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
 
     # 공통 파라미터 설정

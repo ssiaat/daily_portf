@@ -1,5 +1,5 @@
 import numpy as np
-import utils
+import tensorflow as tf
 
 
 class Agent:
@@ -69,17 +69,17 @@ class Agent:
         self.win_cnt = 0
 
     def set100(self, tensor):
-        return tensor / tensor.sum()
+        return tf.cast(tensor / tf.reduce_sum(tensor), dtype='float32')
 
     def set_balance(self, balance):
         self.initial_balance = balance
 
     def renewal_portfolio_ratio(self):
-        if self.num_stocks.sum() > 0:
+        if tf.reduce_sum(self.num_stocks) > 0:
             curr_price = self.environment.get_price()
             self.portfolio_value_each = self.num_stocks * curr_price
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
-            self.portfolio_value = self.portfolio_value_each.sum() + self.balance
+            self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
     def decide_action(self, pred_policy, epsilon):
 
@@ -95,7 +95,7 @@ class Agent:
             exploration = np.random.random((self.num_ticker,)) < epsilon
             random_action = [np.random.randint(0,2) for _ in range(self.num_ticker)]
             action = np.where(exploration==1, random_action, action)
-            ratio = self.set100(np.where(exploration==1, ratio.mean()/2, ratio))
+            ratio = self.set100(np.where(exploration==1, tf.reduce_mean(ratio) / 2, ratio))
 
         # hold 여부 결정
         action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
@@ -109,11 +109,11 @@ class Agent:
         return action, ratio, exploration
 
     def decide_trading_unit(self, ratio, curr_price):
-        sell_trading_unit = np.floor((self.portfolio_ratio - ratio).clip(0, 10) * self.portfolio_value_each / curr_price)
+        sell_trading_unit = tf.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * self.portfolio_value_each / curr_price)
         
         sell_trading_value = curr_price * sell_trading_unit
 
-        buy_trading_unit = np.floor((ratio - self.portfolio_ratio).clip(0, 10) * (sell_trading_value.sum() + self.balance) / curr_price)
+        buy_trading_unit = tf.floor(tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10) * (tf.reduce_sum(sell_trading_value) + self.balance) / curr_price)
 
         return buy_trading_unit, sell_trading_unit
 
@@ -128,7 +128,7 @@ class Agent:
 
         buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
         self.num_stocks += buy_unit - sell_unit
-        self.balance = (sell_unit * curr_price).sum() + self.balance - (buy_unit * curr_price).sum()
+        self.balance = tf.reduce_sum(sell_unit * curr_price) + self.balance - tf.reduce_sum(buy_unit * curr_price)
 
         # 포트폴리오 가치 갱신
         self.renewal_portfolio_ratio()
