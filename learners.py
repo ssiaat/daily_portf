@@ -17,7 +17,7 @@ class ReinforcementLearner:
     lock = threading.Lock()
 
     def __init__(self, rl_method='rl', trainable=False,
-                price_data=None, vol_data=None, training_data=None,
+                price_data=None, vol_data=None, ks_data=None, training_data=None,
                 hold_criter=0., delayed_reward_threshold=.05,
                 num_ticker=100, num_features=7, num_steps=1, lr=0.001,
                 value_network=None, policy_network=None,
@@ -31,12 +31,14 @@ class ReinforcementLearner:
         self.trainable = trainable
         # 환경 설정
         self.price_data = price_data
-        self.environment = Environment(price_data, vol_data)
+        self.environment = Environment(price_data, vol_data, ks_data)
+
         # 에이전트 설정
         self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter,
                     delayed_reward_threshold=delayed_reward_threshold)
         # 학습 데이터
         self.training_data = training_data
+        self.total_len = len(training_data.index)  # 전체 학습 기간의 날짜 수
         self.sample = None
         self.training_data_idx = -1
 
@@ -57,12 +59,10 @@ class ReinforcementLearner:
         self.memory_policy = []
         self.memory_pv = []
         self.memory_num_stocks = []
-        self.memory_exp_idx = []
         self.memory_learning_idx = []
         # 에포크 관련 정보
         self.loss = 0.
         self.itr_cnt = 0
-        self.exploration_cnt = 0
         self.batch_size = 0
         self.learning_cnt = 0
         # 로그 등 출력 경로
@@ -108,12 +108,10 @@ class ReinforcementLearner:
         self.memory_policy = []
         self.memory_pv = []
         self.memory_num_stocks = []
-        self.memory_exp_idx = []
         self.memory_learning_idx = []
         # 에포크 관련 정보 초기화
         self.loss = 0.
         self.itr_cnt = 0
-        self.exploration_cnt = 0
         self.batch_size = 0
         self.learning_cnt = 0
 
@@ -219,6 +217,9 @@ class ReinforcementLearner:
                 if self.policy_network is not None:
                     pred_policy = self.policy_network.predict(list(q_sample))
 
+                # 포트폴리오 가치를 오늘 가격 반영해서 갱신
+                self.agent.renewal_portfolio_ratio()
+
                 # 신경망 또는 탐험에 의한 행동 결정
                 action, ratio, exploration = \
                     self.agent.decide_action(
@@ -226,7 +227,7 @@ class ReinforcementLearner:
 
                 # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
                 immediate_reward, delayed_reward = \
-                    self.agent.act(action, ratio)
+                    self.agent.act(ratio)
 
                 # 행동 및 행동에 대한 결과를 기억
                 self.memory_sample.append(list(q_sample))
@@ -238,13 +239,10 @@ class ReinforcementLearner:
                     self.memory_policy.append(pred_policy)
                 self.memory_pv.append(self.agent.portfolio_value)
                 self.memory_num_stocks.append(self.agent.num_stocks)
-                if exploration:
-                    self.memory_exp_idx.append(self.training_data_idx)
 
                 # 반복에 대한 정보 갱신
                 self.batch_size += 1
                 self.itr_cnt += 1
-                self.exploration_cnt += 1 if exploration else 0
 
                 # 지연 보상 발생된 경우 미니 배치 학습
                 if learning and (delayed_reward != 0):
@@ -263,12 +261,10 @@ class ReinforcementLearner:
             if self.learning_cnt > 0:
                 self.loss /= self.learning_cnt
             logging.info("[Epoch {}/{}] Epsilon:{:.4f} "
-                "#Expl.:{}/{} PV:{:,.0f} "
-                "LC:{} Loss:{:.6f} ET:{:.4f}".format(
+                "PV:{:,.0f} Win:{}/{} LC:{} Loss:{:.6f} ET:{:.4f}".format(
                     epoch_str, num_epoches, epsilon,
-                    self.exploration_cnt, self.itr_cnt,
-                    self.agent.portfolio_value, self.learning_cnt, 
-                    self.loss, elapsed_time_epoch))
+                    self.agent.portfolio_value, self.agent.win_cnt, self.total_len,
+                    self.learning_cnt, self.loss, elapsed_time_epoch))
 
             # 학습 관련 정보 갱신
             max_portfolio_value = max(
@@ -348,8 +344,10 @@ class A2CLearner(ActorCriticLearner):
         y_policy = np.full((batch_size, self.agent.NUM_ACTIONS), .5)
         value_max_next = 0
         reward_next = self.memory_reward[-1]
+        print(batch_size)
         for i, (sample, action, value, policy, reward) \
             in enumerate(memory):
+            print(sample, action, value, policy, reward)
             x[i] = sample
             r = (delayed_reward + reward_next - reward * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next

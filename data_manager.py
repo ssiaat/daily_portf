@@ -9,7 +9,7 @@ curs = conn.cursor()
 
 # ks200 데이터는 따로 받아옴
 sql = f"SELECT * FROM ks200 ORDER BY ks200.date ASC;"
-ks200 = pd.read_sql(sql=sql, con=conn)
+ks200 = pd.read_sql(sql=sql, con=conn).set_index('date')
 
 # v4 version
 COLUMNS_CHART_DATA = ['date', 'price_mod', 'open', 'high', 'low', 'close', 'volume']
@@ -198,6 +198,7 @@ def make_data(stock_codes, start_date, end_date):
     training_df = pd.DataFrame()
     price_df = pd.DataFrame()
     vol_df = pd.DataFrame()
+
     for stock_code in stock_codes:
         # From local db,. 한종목씩
         price_data, vol_data, training_data = load_data_sql(stock_code, start_date, end_date)  ## 인자 1 ## 인자 2, 3
@@ -207,11 +208,12 @@ def make_data(stock_codes, start_date, end_date):
         training_df = pd.concat([training_df, training_data] , axis=1)  ## 옆으로 늘어뜨려붙이기
         price_df = pd.concat([price_df, price_data], axis=1)
         vol_df = pd.concat([vol_df, vol_data], axis=1)
+
     price_df.columns = stock_codes
     vol_df.columns = stock_codes
     vol_df = (vol_df.T / vol_df.sum(axis=1)).T
 
-    return price_df, vol_df, training_df
+    return price_df, vol_df, ks200.loc[price_df.index], training_df
 
 
 
@@ -231,13 +233,6 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
     # 데이터 전처리
     if ver!= 'v3':
         data = transformation_yh(data)
-
-
-    # 기간 필터링
-    # date 만   string 으로   타입변환해야함
-    data['date'] = data['date'].apply(lambda _: str(_))
-    data['date'] = data['date'].str.replace('-', '')
-    data['date'] = data['date'].str.split(' ').str[0]
 
     # processing nan
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()

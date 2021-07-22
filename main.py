@@ -34,8 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--balance', type=int, default=10000000)
     parser.add_argument('--num_epoches', type=int, default=30)
     parser.add_argument('--hold_criter', type=float, default=0.)
-    parser.add_argument('--delayed_reward_threshold',
-                        type=float, default=0.05)
+    parser.add_argument('--delayed_reward_threshold', type=float, default=0.05)
     parser.add_argument('--output_name', default=utils.get_time_str())
     parser.add_argument('--value_network_name', default=value_name)
     parser.add_argument('--policy_network_name', default=policy_name)
@@ -95,7 +94,7 @@ if __name__ == '__main__':
     # 학습은 삼성전자부터 마지막 ticker, 마지막 ticker부터 삼성전자 순서로 진행함
     #-----------------------
     stock_codes = np.array(pd.read_sql('show tables', data_manager.conn).values).reshape(-1,)[:2]
-    price_data, vol_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
+    price_data, vol_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
 
     # 공통 파라미터 설정
     common_params = {'rl_method': args.rl_method, 'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
@@ -107,7 +106,7 @@ if __name__ == '__main__':
     # Not defined Error 때문에
 
     common_params.update({'price_data': price_data, 'vol_data': vol_data,
-                          'training_data': training_data})
+                          'ks_data' : ks_data, 'training_data': training_data})
     if args.rl_method == 'ac':
         learner = ActorCriticLearner(**{**common_params,
                                         'value_network_path': value_network_path,
