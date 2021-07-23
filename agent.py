@@ -3,15 +3,8 @@ import tensorflow as tf
 
 
 class Agent:
-    # 에이전트 상태가 구성하는 값 개수
-    STATE_DIM = 2  # 주식 보유 비율, 포트폴리오 가치 비율
-
     # 매매 수수료 및 세금
-    TRADING_CHARGE = 0.00015  # 거래 수수료 0.015%
-    # TRADING_CHARGE = 0.00011  # 거래 수수료 0.011%
-    # TRADING_CHARGE = 0  # 거래 수수료 미적용
-    TRADING_TAX = 0.0025  # 거래세 0.25%
-    # TRADING_TAX = 0  # 거래세 미적용
+    TRADING_TAX = [0.00015, 0.0025]  # 거래세 매수, 매도
 
     # 행동
     ACTION_BUY = 0  # 매수
@@ -74,10 +67,12 @@ class Agent:
     def set_balance(self, balance):
         self.initial_balance = balance
 
-    def renewal_portfolio_ratio(self):
+    def renewal_portfolio_ratio(self, transaction, buy_value=None, sell_value=None):
         if tf.reduce_sum(self.num_stocks) > 0:
             curr_price = self.environment.get_price()
             self.portfolio_value_each = self.num_stocks * curr_price
+            if transaction:
+                self.portfolio_value_each -= buy_value * self.TRADING_TAX[0] + sell_value * self.TRADING_TAX[1]
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
@@ -110,7 +105,7 @@ class Agent:
 
     def decide_trading_unit(self, ratio, curr_price):
         sell_trading_unit = tf.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * self.portfolio_value_each / np.where(curr_price==0., 1., curr_price))
-        sell_trading_value = curr_price * sell_trading_unit
+        sell_trading_value = curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1])
         buy_trading_unit = tf.floor(tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10) * (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price==0., 1., curr_price))
 
         return buy_trading_unit, sell_trading_unit
@@ -123,13 +118,17 @@ class Agent:
         # 즉시 보상 초기화
         self.immediate_reward = 0
 
+        # 거래 수량, 금액 결정, 거래세 매수:0.015%, 매도:0.25%
         buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
         self.num_stocks += buy_unit - sell_unit
-        self.balance = tf.reduce_sum(sell_unit * curr_price) + self.balance - tf.reduce_sum(buy_unit * curr_price)
+        buy_value = tf.reduce_sum(buy_unit * curr_price) * (1 - self.TRADING_TAX[0])
+        sell_value = tf.reduce_sum(sell_unit * curr_price) * (1 - self.TRADING_TAX[1])
+        self.balance = sell_value + self.balance - buy_value
 
-        # 포트폴리오 가치 갱신
-        self.renewal_portfolio_ratio()
-
+        # 포트폴리오 가치 갱신, 거래세 반영
+        self.renewal_portfolio_ratio(transaction=True, buy_value=buy_value, sell_value=sell_value)
+        
+        
         # ks200 대비 수익률로 보상 결정
         ks_now = self.environment.get_ks()
         ks_ret = (ks_now - self.base_ks) / self.base_ks

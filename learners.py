@@ -30,6 +30,7 @@ class ReinforcementLearner:
         # 환경 설정
         self.price_data = price_data
         self.environment = Environment(price_data, cap_data, ks_data)
+        self.ks_ret = ((ks_data.iloc[-1] - ks_data.iloc[0]) / ks_data.iloc[0]).values[0]
 
         # 에이전트 설정
         self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter,
@@ -203,7 +204,7 @@ class ReinforcementLearner:
                     pred_policy = self.policy_network.predict(next_sample) * curr_cap
 
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
-                self.agent.renewal_portfolio_ratio()
+                self.agent.renewal_portfolio_ratio(transaction=False)
 
                 # 신경망 또는 탐험에 의한 행동 결정
                 action, ratio, exploration = self.agent.decide_action(pred_policy, epsilon)
@@ -242,10 +243,11 @@ class ReinforcementLearner:
             if self.learning_cnt > 0:
                 self.value_loss /= self.learning_cnt
                 self.policy_loss /= self.learning_cnt
-            logging.info("[Epoch {}/{}] Epsilon:{:.4f} "
-                "PV:{:,.0f} Win:{}/{} LC:{} ValueLoss:{:.6f} PolicyLoss:{:.6f} ET:{:.4f}".format(
-                    epoch_str, num_epoches, epsilon,
-                    self.agent.portfolio_value, self.agent.win_cnt, self.total_len,
+            pv_ret = (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance
+            logging.info("[Epoch {}/{}] Epsilon:{:.4f} PV:{:,.0f} PVReturn: {:.4f}/{:.4f}"
+                " Win:{}/{} LC:{} ValueLoss:{:.6f} PolicyLoss:{:.6f} ET:{:.4f}".format(
+                    epoch_str, num_epoches, epsilon, self.agent.portfolio_value,
+                    pv_ret, self.ks_ret, self.agent.win_cnt, self.total_len,
                     self.learning_cnt, self.value_loss, self.policy_loss, elapsed_time_epoch))
 
             # 학습 관련 정보 갱신

@@ -33,58 +33,28 @@ def preprocessing(data):
         data[col] = (data[col] - min_num) / (max_num - min_num)
     return data
 
-## 특성에서  zscore 만들기
-def zscore(x, window):
-    r = x.rolling(window=window)
-    m = r.mean().shift(1)
-    s = r.std(ddof=0).shift(1)
-    z = (x-m)/s
-    return z
+def get_weights_FFD(d, thres):
+    w, k = [1.], 1
+    while True:
+        w_ = -w[-1] / k * (d - k + 1)
+        if abs(w_) < thres:
+            break
+        w.append(w_)
+        k+=1
+    return np.array(w[::-1]).reshape(-1,1)
 
-def transformation(data, ver='v3'):
-    ## 모든 기존특성들 대해서  zscore 추가
-    cols = data.columns.tolist()
-    for col in cols:
-        data[f'zscore_{col}'] = zscore(data[col], window = 20)
-        # 마지막날의  최근 20일 기준  z_score
-
-    windows = [5, 20]
-    for window in windows:
-        data['close_ma{}'.format(window)] = \
-            data['close'].rolling(window).mean()
-        data['volume_ma{}'.format(window)] = \
-            data['volume'].rolling(window).mean()
-        data['close_ma%d_ratio' % window] = \
-            (data['close'] - data['close_ma%d' % window]) \
-            / data['close_ma%d' % window]
-        data['volume_ma%d_ratio' % window] = \
-            (data['volume'] - data['volume_ma%d' % window]) \
-            / data['volume_ma%d' % window]
-
-    # 전날종가 ~ 다음날 오픈 : 미국장 반영 효과
-    data['open_lastclose_ratio'] = np.zeros(len(data))
-    data.loc[1:, 'open_lastclose_ratio'] = \
-        (data['open'][1:].values - data['close'][:-1].values) \
-        / data['close'][:-1].values
-
-    # 하루의 변동폭 range
-    data['high_low_ratio'] = \
-        data['high'].values \
-        / data['low'].values
-
-    data['volume_lastvolume_ratio'] = np.zeros(len(data))
-    data.loc[1:, 'volume_lastvolume_ratio'] = \
-        (data['volume'][1:].values - data['volume'][:-1].values) \
-        / data['volume'][:-1] \
-            .replace(to_replace=0, method='ffill') \
-            .replace(to_replace=0, method='bfill').values
-
-    ## zscore 최초 20일  Nan 되어있음
-    data = data.fillna(0)
-    ## 마지막에  전체 data 대해서  MinMaxScaler ?
-
-    return data
-
+def fracDiff_FFD(series, d, thres=1e-5):
+    w, width, df = get_weights_FFD(d, thres), len(w)-1, {}
+    for name in series.columns:
+        seriesF, df_ = series[[name]].fillna(method='ffill').dropna(), pd.Series()
+        for iloc1 in range(width, seriesF.shape[0]):
+            loc0, loc1 = seriesF.index[iloc1 - width], seriesF.index[iloc1]
+            if not np.isfinite(series.loc[loc1, name]):
+                continue
+            df_[loc1] = np.dot(w.T, seriesF.loc[loc0:loc1])[0,0]
+        df[name] = df_.copy(deep=True)
+    df - pd.concat(df, axis=1)
+    return df
 
 def make_data(stock_codes, start_date, end_date):
     training_df = pd.DataFrame()
