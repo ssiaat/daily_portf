@@ -13,25 +13,26 @@ import data_manager
 import warnings
 
 warnings.filterwarnings('ignore')
+os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-model_name = 'dnn'
+num_stocks = 5
 value_name = None
 policy_name = None
 start_date = '20000201'
-end_date = '20201230'
+end_date = '20001226'
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_stocks', type=int, default=10)
+    parser.add_argument('--num_stocks', type=int, default=num_stocks)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
-    parser.add_argument('--balance', type=int, default=10000000)
+    parser.add_argument('--balance', type=int, default=1e9)
     parser.add_argument('--num_epoches', type=int, default=30)
     parser.add_argument('--hold_criter', type=float, default=0.)
-    parser.add_argument('--delayed_reward_threshold', type=float, default=0.05)
+    parser.add_argument('--delayed_reward_threshold', type=float, default=0.03)
     parser.add_argument('--output_name', default=utils.get_time_str())
     parser.add_argument('--value_network_name', default=value_name)
     parser.add_argument('--policy_network_name', default=policy_name)
@@ -62,9 +63,9 @@ if __name__ == '__main__':
     logging.basicConfig(format="%(message)s", handlers=[file_handler, stream_handler], level=logging.DEBUG)
 
     if args.learning == True:
-        print('-----------------this running is for training')
+        print('This running is for training')
     else:
-        print('-----------------this running is for testing')
+        print('This running is for testing')
 
     # 로그, Keras Backend 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
     from learners import A2CLearner

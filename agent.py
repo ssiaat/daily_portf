@@ -109,20 +109,17 @@ class Agent:
         return action, ratio, exploration
 
     def decide_trading_unit(self, ratio, curr_price):
-        sell_trading_unit = tf.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * self.portfolio_value_each / curr_price)
-        
+        sell_trading_unit = tf.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * self.portfolio_value_each / np.where(curr_price==0., 1., curr_price))
         sell_trading_value = curr_price * sell_trading_unit
-
-        buy_trading_unit = tf.floor(tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10) * (tf.reduce_sum(sell_trading_value) + self.balance) / curr_price)
+        buy_trading_unit = tf.floor(tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10) * (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price==0., 1., curr_price))
 
         return buy_trading_unit, sell_trading_unit
 
     def act(self, ratio):
+
         # 환경에서 현재 가격 얻기
         curr_price = self.environment.get_price()
-        
-        # 새로운 가격으로 portfolio_value 갱신
-        
+
         # 즉시 보상 초기화
         self.immediate_reward = 0
 

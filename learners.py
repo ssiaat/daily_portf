@@ -58,7 +58,8 @@ class ReinforcementLearner:
         self.memory_num_stocks = []
         self.memory_learning_idx = []
         # 에포크 관련 정보
-        self.loss = 0.
+        self.value_loss = 0.
+        self.policy_loss = 0.
         self.itr_cnt = 0
         self.batch_size = 0
         self.learning_cnt = 0
@@ -68,25 +69,25 @@ class ReinforcementLearner:
         # action 조정 ([0,1,0,0,1] => [0,3,4,6,9]
         self.modify_action_idx = np.array([i*2 for i in range(self.num_ticker)])
 
-    def init_value_network(self, activation='relu', loss='mse'):
+    def init_value_network(self, activation='linear'):
         self.value_network = DNN(
             input_dim=self.num_features,
             output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
             num_ticker=self.num_ticker,
             trainable=self.trainable,
-            lr=self.lr, activation=activation, loss=loss)
+            lr=self.lr, activation=activation)
         if self.reuse_models and \
             os.path.exists(self.value_network_path):
                 self.value_network.load_model(
                     model_path=self.value_network_path)
 
-    def init_policy_network(self, activation='sigmoid', loss='binary_crossentropy'):
+    def init_policy_network(self, activation='sigmoid'):
         self.policy_network = DNN(
             input_dim=self.num_features,
             output_dim=self.num_ticker,
             num_ticker=self.num_ticker,
             trainable=self.trainable,
-            lr=self.lr, activation=activation, loss=loss)
+            lr=self.lr, activation=activation)
         if self.reuse_models and \
             os.path.exists(self.policy_network_path):
             self.policy_network.load_model(
@@ -110,7 +111,8 @@ class ReinforcementLearner:
         self.memory_num_stocks = []
         self.memory_learning_idx = []
         # 에포크 관련 정보 초기화
-        self.loss = 0.
+        self.value_loss = 0.
+        self.policy_loss = 0.
         self.itr_cnt = 0
         self.batch_size = 0
         self.learning_cnt = 0
@@ -132,31 +134,23 @@ class ReinforcementLearner:
         # 배치 학습 데이터 생성
         x, y_value, y_policy = self.get_batch(batch_size, delayed_reward, discount_factor)
         if len(x) > 0:
-            loss = 0
-            if y_value is not None:
-                # 가치 신경망 갱신
-                loss += self.value_network.train_on_batch(x, y_value)
-            if y_policy is not None:
-                # 정책 신경망 갱신
-                loss += self.policy_network.train_on_batch(x, y_policy)
-            return loss
+            value_loss = self.value_network.learn(x, y_value)
+            policy_loss = self.policy_network.learn(x, y_policy)
+            return value_loss, policy_loss
         return None
 
     def fit(self, delayed_reward, discount_factor, full=False):
-        batch_size = len(self.memory_reward) if full \
-            else self.batch_size
+        batch_size = len(self.memory_reward) if full else self.batch_size
         # 배치 학습 데이터 생성 및 신경망 갱신
         if batch_size > 0:
-            _loss = self.update_networks(batch_size, delayed_reward, discount_factor)
-            if _loss is not None:
-                self.loss += abs(_loss)
-                self.learning_cnt += 1
-                self.memory_learning_idx.append(self.training_data_idx)
+            value_loss, policy_loss = self.update_networks(batch_size, delayed_reward, discount_factor)
+            self.value_loss += value_loss
+            self.policy_loss += policy_loss
+            self.learning_cnt += 1
+            self.memory_learning_idx.append(self.training_data_idx)
             self.batch_size = 0
 
-    def run(
-        self, num_epoches=100, balance=10000000,
-        discount_factor=0.9, start_epsilon=0.5, learning=True):
+    def run(self, num_epoches=100, balance=10000000, discount_factor=0.9, start_epsilon=0.5, learning=True):
         info = "RL:a2c LR:{lr} " \
             "DF:{discount_factor} DRT:{delayed_reward_threshold}".format(
             lr=self.lr, discount_factor=discount_factor,
@@ -176,6 +170,7 @@ class ReinforcementLearner:
         epoch_win_cnt = 0
 
         # 학습 반복
+        print('Start Learning')
         for epoch in range(num_epoches):
             time_start_epoch = time.time()
 
@@ -196,45 +191,44 @@ class ReinforcementLearner:
                     break
                 next_sample = np.split(next_sample, self.num_ticker, axis=0)
 
-                with tf.GradientTape() as tape:
-                    # 가치, 정책 신경망 예측
-                    pred_value = None
-                    pred_policy = None
-                    curr_cap = self.environment.get_cap()
-                    curr_cap_value = np.tile(curr_cap.reshape(-1, 1), 2).reshape(-1,)
+                # 가치, 정책 신경망 예측
+                pred_value = None
+                pred_policy = None
+                curr_cap = self.environment.get_cap()
+                curr_cap_value = np.tile(curr_cap.reshape(-1, 1), 2).reshape(-1,)
 
-                    if self.value_network is not None:
-                        pred_value = self.value_network.predict(next_sample) * curr_cap_value
-                    if self.policy_network is not None:
-                        pred_policy = self.policy_network.predict(next_sample) * curr_cap
+                if self.value_network is not None:
+                    pred_value = self.value_network.predict(next_sample) * curr_cap_value
+                if self.policy_network is not None:
+                    pred_policy = self.policy_network.predict(next_sample) * curr_cap
 
-                    # 포트폴리오 가치를 오늘 가격 반영해서 갱신
-                    self.agent.renewal_portfolio_ratio()
+                # 포트폴리오 가치를 오늘 가격 반영해서 갱신
+                self.agent.renewal_portfolio_ratio()
 
-                    # 신경망 또는 탐험에 의한 행동 결정
-                    action, ratio, exploration = self.agent.decide_action(pred_policy, epsilon)
+                # 신경망 또는 탐험에 의한 행동 결정
+                action, ratio, exploration = self.agent.decide_action(pred_policy, epsilon)
 
-                    # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
-                    immediate_reward, delayed_reward = self.agent.act(ratio)
+                # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
+                immediate_reward, delayed_reward = self.agent.act(ratio)
 
-                    # 행동 및 행동에 대한 결과를 기억
-                    self.memory_sample.append(next_sample)
-                    self.memory_action.append(action + self.modify_action_idx)
-                    self.memory_reward.append(immediate_reward)
-                    if self.value_network is not None:
-                        self.memory_value.append(pred_value)
-                    if self.policy_network is not None:
-                        self.memory_policy.append(pred_policy)
-                    self.memory_pv.append(self.agent.portfolio_value)
-                    self.memory_num_stocks.append(self.agent.num_stocks)
+                # 행동 및 행동에 대한 결과를 기억
+                self.memory_sample.append(next_sample)
+                self.memory_action.append(action + self.modify_action_idx)
+                self.memory_reward.append(immediate_reward)
+                if self.value_network is not None:
+                    self.memory_value.append(pred_value)
+                if self.policy_network is not None:
+                    self.memory_policy.append(pred_policy)
+                self.memory_pv.append(self.agent.portfolio_value)
+                self.memory_num_stocks.append(self.agent.num_stocks)
 
-                    # 반복에 대한 정보 갱신
-                    self.batch_size += 1
-                    self.itr_cnt += 1
+                # 반복에 대한 정보 갱신
+                self.batch_size += 1
+                self.itr_cnt += 1
 
-                    # 지연 보상 발생된 경우 미니 배치 학습
-                    if learning and (tf.reduce_sum(delayed_reward) != 0):
-                        self.fit(delayed_reward, discount_factor)
+                # 지연 보상 발생된 경우 미니 배치 학습
+                if learning and (tf.reduce_sum(delayed_reward) != 0):
+                    self.fit(delayed_reward, discount_factor)
 
             # 에포크 종료 후 학습
             if learning:
@@ -246,12 +240,13 @@ class ReinforcementLearner:
             time_end_epoch = time.time()
             elapsed_time_epoch = time_end_epoch - time_start_epoch
             if self.learning_cnt > 0:
-                self.loss /= self.learning_cnt
+                self.value_loss /= self.learning_cnt
+                self.policy_loss /= self.learning_cnt
             logging.info("[Epoch {}/{}] Epsilon:{:.4f} "
-                "PV:{:,.0f} Win:{}/{} LC:{} Loss:{:.6f} ET:{:.4f}".format(
+                "PV:{:,.0f} Win:{}/{} LC:{} ValueLoss:{:.6f} PolicyLoss:{:.6f} ET:{:.4f}".format(
                     epoch_str, num_epoches, epsilon,
                     self.agent.portfolio_value, self.agent.win_cnt, self.total_len,
-                    self.learning_cnt, self.loss, elapsed_time_epoch))
+                    self.learning_cnt, self.value_loss, self.policy_loss, elapsed_time_epoch))
 
             # 학습 관련 정보 갱신
             max_portfolio_value = max(
@@ -303,7 +298,7 @@ class A2CLearner(ReinforcementLearner):
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward) in enumerate(memory):
             x[i] = np.array(sample)
-            r = (delayed_reward + reward_next - reward * 2) * 100
+            r = (delayed_reward + reward_next - reward * 2)
             y_value[i, action] = r + discount_factor * value_max_next
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
             y_policy[i] = sigmoid(advantage)
