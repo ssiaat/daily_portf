@@ -85,6 +85,7 @@ if __name__ == '__main__':
 
     # 포트폴리오 구성 ticker정하고 데이터 불러옴
     stock_codes = data_manager.get_stock_codes(args.num_stocks, args.end_date)
+    print(f'{len(stock_codes)} stocks in universe')
     price_data, cap_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
 
     # 공통 파라미터 설정

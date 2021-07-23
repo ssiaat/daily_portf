@@ -16,6 +16,5 @@ df = data_manager.ks200
 # plt.axhline(out['95%conf'].mean(), linewidth=1, color='r', linestyle='dotted')
 # df = (df - df.min()) / (df.max() - df.min())
 # plt.plot(df)
-for w_t in data_manager.w_list:
-    print(len(w_t))
-# print(df.iloc[589:600])
+print(list(df.index).index(pd.Timestamp('20210630')))
+from datetime import datetime

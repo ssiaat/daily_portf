@@ -21,7 +21,11 @@ COLUMNS_TRAINING_DATA_V3 = ['volume', 'cap', 'foreigner_rate', 'netbuy_instituti
 
 # 마지막 시점 기준 시총 상위 n개 ticker 가져옴
 def get_stock_codes(n, end_date):
-    stock_codes = capital.loc[pd.Timestamp(end_date)].dropna().sort_values(ascending=False).index[:n]
+    last_idx = list(capital.index).index(pd.Timestamp(end_date))
+    stock_codes_last = capital.iloc[last_idx].dropna().sort_values(ascending=False).index[:n]
+    start_idx = last_idx - 300 if last_idx >= 300 else 0
+    stock_code_start = capital.iloc[start_idx].dropna().index
+    stock_codes = list(set(stock_codes_last) & set(stock_code_start))
     stock_codes = [i[1:] for i in stock_codes]
     return stock_codes
 
