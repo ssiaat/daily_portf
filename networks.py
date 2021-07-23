@@ -52,41 +52,31 @@ class DNN(Network):
         super().__init__(*args, **kwargs)
         inp = [Input(shape=(self.input_dim,)) for i in range(self.num_ticker)]
 
-        output = self.get_network_head(inp, self.trainable).output
+        output = self.get_network_head(inp).output
         output = Dense(
             self.output_dim, activation=self.activation_last,
             kernel_initializer=self.initializer)(output)
         self.model = Model(inp, output)
 
+    def residual_layer(self, inp, hidden_size):
+        output_r = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(inp)
+        output_r = BatchNormalization(trainable=self.trainable)(output_r)
+        output = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(output_r)
+        output = BatchNormalization(trainable=self.trainable)(output)
+        output = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = BatchNormalization(trainable=self.trainable)(output)
+        return output + output_r
+
     def mini_dnn(self, inp):
-        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(inp)
-        output = BatchNormalization(trainable=self.trainable)(output)
-        output = Dense(128, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = BatchNormalization(trainable=self.trainable)(output)
+        output = self.residual_layer(inp, 128)
+        output = self.residual_layer(output, 32)
         return output
 
-
-    def get_network_head(self, inp, trainable):
+    def get_network_head(self, inp):
         output = concatenate([self.mini_dnn(tf.reshape(i, (-1, self.input_dim))) for i in inp])
-        output_r = Dense(1024, activation=self.activation,
-                       kernel_initializer=self.initializer)(output)
-        output_r = BatchNormalization(trainable=trainable)(output_r)
-        output = Dense(1024, activation=self.activation,
-                       kernel_initializer=self.initializer)(output_r)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = Dense(1024, activation=self.activation,
-                       kernel_initializer=self.initializer)(output)
-        output = BatchNormalization(trainable=trainable)(output)
-        output_r = Dense(512, activation=self.activation,
-                       kernel_initializer=self.initializer)(output + output_r)
-        output_r = BatchNormalization(trainable=trainable)(output_r)
-        output = Dense(512, activation=self.activation,
-                         kernel_initializer=self.initializer)(output_r)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = Dense(512, activation=self.activation,
-                         kernel_initializer=self.initializer)(output + output_r)
-        output = BatchNormalization(trainable=trainable)(output)
-        output = Dense(128, activation=self.activation,
-                       kernel_initializer=self.initializer)(output)
-        output = BatchNormalization(trainable=trainable)(output)
+        output = self.residual_layer(output, 2048)
+        output = self.residual_layer(output, 1024)
+        output = self.residual_layer(output, 512)
+        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = BatchNormalization(trainable=self.trainable)(output)
         return Model(inp, output)

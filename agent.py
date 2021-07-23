@@ -88,13 +88,14 @@ class Agent:
         exploration = [False] * self.num_ticker
         if np.random.rand() < epsilon:
             exploration = np.random.random((self.num_ticker,)) < epsilon
-            random_action = [np.random.randint(0,2) for _ in range(self.num_ticker)]
+            random_action = np.where(np.random.random((self.num_ticker,)) > 0.5, 0, 1)
             action = np.where(exploration==1, random_action, action)
             ratio = self.set100(np.where(exploration==1, tf.reduce_mean(ratio) / 2, ratio))
 
         # hold 여부 결정
-        action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
-        ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
+        if self.hold_criter > 0.:
+            action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
+            ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
         # 횟수 갱신
         self.num_buy += np.where(action==self.ACTION_BUY, 1, 0)
@@ -137,7 +138,7 @@ class Agent:
         if self.profitloss > 0:
             self.win_cnt += 1
 
-        # 즉시 보상 - ks200 대비 아웃퍼폼 / 값이 너무 작아질까 우려되어 * 10
+        # 즉시 보상 - ks200 대비 아웃퍼폼
         self.immediate_reward = self.profitloss * self.portfolio_ratio
 
         # 지연 보상 - 익절, 손절 기준
