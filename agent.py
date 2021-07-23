@@ -72,7 +72,7 @@ class Agent:
             curr_price = self.environment.get_price()
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
-                self.portfolio_value_each -= buy_value * self.TRADING_TAX[0] + sell_value * self.TRADING_TAX[1]
+                self.portfolio_value_each += buy_value * self.TRADING_TAX[0] - sell_value * self.TRADING_TAX[1]
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 

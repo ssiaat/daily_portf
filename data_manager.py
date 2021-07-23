@@ -82,7 +82,6 @@ def make_data(stock_codes, start_date, end_date):
     return price_df.fillna(0), cap_df.fillna(0), ks200.loc[price_df.index], training_df.fillna(0)
 
 
-import matplotlib.pyplot as plt
 # load_data_sql 한종목을 읽어오는것.
 def load_data_sql(fpath, date_from, date_to, ver='v3'):
 
