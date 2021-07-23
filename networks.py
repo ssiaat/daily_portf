@@ -74,7 +74,7 @@ class DNN(Network):
 
     def get_network_head(self, inp):
         output = concatenate([self.mini_dnn(tf.reshape(i, (-1, self.input_dim))) for i in inp])
-        output = self.residual_layer(output, 2048)
+        # output = self.residual_layer(output, 2048)
         output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
         output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)

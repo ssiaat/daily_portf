@@ -135,7 +135,7 @@ class ReinforcementLearner:
         # 배치 학습 데이터 생성
         x, y_value, y_policy = self.get_batch(batch_size, delayed_reward, discount_factor)
         if len(x) > 0:
-            value_loss = self.value_network.learn(x, y_value)
+            value_loss = self.value_network.learn(x, y_value) / 100
             policy_loss = self.policy_network.learn(x, y_policy)
             return value_loss, policy_loss
         return None

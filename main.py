@@ -16,11 +16,11 @@ warnings.filterwarnings('ignore')
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-num_stocks = 5
+num_stocks = 100
 value_name = None
 policy_name = None
 start_date = '20000201'
-end_date = '20001226'
+end_date = '20151230'
 
 if __name__ == '__main__':
 

@@ -43,23 +43,26 @@ def get_weights_FFD(d, thres):
         k+=1
     return np.array(w[::-1]).reshape(-1,1)
 
-def fracDiff_FFD(series, d, thres=1e-5):
-    w, width, df = get_weights_FFD(d, thres), len(w)-1, {}
+w = get_weights_FFD(0.6, 1e-5)
+def fracDiff_FFD(series):
+    width, df = len(w)-1, {}
     for name in series.columns:
-        seriesF, df_ = series[[name]].fillna(method='ffill').dropna(), pd.Series()
+        seriesF, df_ = series[[name]].fillna(0), pd.Series()
         for iloc1 in range(width, seriesF.shape[0]):
             loc0, loc1 = seriesF.index[iloc1 - width], seriesF.index[iloc1]
             if not np.isfinite(series.loc[loc1, name]):
                 continue
             df_[loc1] = np.dot(w.T, seriesF.loc[loc0:loc1])[0,0]
         df[name] = df_.copy(deep=True)
-    df - pd.concat(df, axis=1)
+    df = pd.concat(df, axis=1)
     return df
 
 def make_data(stock_codes, start_date, end_date):
     training_df = pd.DataFrame()
     price_df = pd.DataFrame()
     cap_df = pd.DataFrame()
+    start_date = pd.Timestamp(start_date)
+    end_date = pd.Timestamp(end_date)
 
     for stock_code in stock_codes:
         # From local db,. 한종목씩
@@ -78,31 +81,30 @@ def make_data(stock_codes, start_date, end_date):
     return price_df.fillna(0), cap_df.fillna(0), ks200.loc[price_df.index], training_df.fillna(0)
 
 
-
+import matplotlib.pyplot as plt
 # load_data_sql 한종목을 읽어오는것.
 def load_data_sql(fpath, date_from, date_to, ver='v3'):
-    header = None if ver == 'v1' else 0
-    # data = pd.read_csv(fpath, thousands=',', header=header,
-    #                    converters={'date': lambda x: str(x)})
+
+
     # fpath는 stock_code 로 받음
-    ##  테이블 명이    숫자인경우  :  ' 작은따옴표 아니라  ` (물결키) 로 감쌈
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
     data = pd.read_sql(sql=sql, con=conn)
     data['ks200'] = ks200.kospi.values
 
-    # processing nan
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
-    data = data.set_index('date').loc[data_del_na.date].reset_index()
-    data = data[(data['date'] >= date_from) & (data['date'] <= date_to)]
+    data = data.set_index('date').loc[data_del_na.date]
+    data = data[data.index <= date_to]
+
+    # 학습 데이터 분리, 전처리
+    training_data = preprocessing(data[COLUMNS_TRAINING_DATA_V3])
+    training_data = fracDiff_FFD(training_data)
+    if date_from > training_data.index[0]:
+        training_data = training_data[training_data.index < date_from]
+    data = data[(data.index >= training_data.index[0]) & (data.index <= training_data.index[-1])]
 
     # 차트 데이터 분리
-    price_data = data[['date', 'price_mod']].set_index('date')
-    cap_data = data[['date', 'volume']].set_index('date')
-
-    # 학습 데이터 분리
-    training_data = data[COLUMNS_TRAINING_DATA_V3]
-    training_data = training_data.astype(float)
-    training_data = preprocessing(training_data)
+    price_data = data['price_mod']
+    cap_data = data['volume']
 
     return price_data, cap_data, training_data
 

@@ -4,7 +4,7 @@ import tensorflow as tf
 
 class Agent:
     # 매매 수수료 및 세금
-    TRADING_TAX = [0.00015, 0.0025]  # 거래세 매수, 매도
+    TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 행동
     ACTION_BUY = 0  # 매수
@@ -143,7 +143,7 @@ class Agent:
 
         # 지연 보상 - 익절, 손절 기준
         delayed_reward = 0
-        if self.profitloss > self.delayed_reward_threshold or self.profitloss < -self.delayed_reward_threshold:
+        if self.profitloss > self.delayed_reward_threshold or self.profitloss < -self.delayed_reward_threshold / 2:
             # 목표 수익률 달성하여 기준 포트폴리오 가치 갱신
             # 또는 손실 기준치를 초과하여 기준 포트폴리오 가치 갱신
             self.base_portfolio_value = self.portfolio_value
