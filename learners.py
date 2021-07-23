@@ -70,7 +70,7 @@ class ReinforcementLearner:
         # action 조정 ([0,1,0,0,1] => [0,3,4,6,9]
         self.modify_action_idx = np.array([i*2 for i in range(self.num_ticker)])
 
-    def init_value_network(self, activation='linear'):
+    def init_value_network(self, activation='sigmoid'):
         self.value_network = DNN(
             input_dim=self.num_features,
             output_dim=self.agent.NUM_ACTIONS * self.num_ticker,

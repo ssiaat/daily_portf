@@ -4,9 +4,6 @@ import logging
 import argparse
 import json
 
-import numpy as np
-import pandas as pd
-
 import settings
 import utils
 import data_manager
@@ -16,7 +13,7 @@ warnings.filterwarnings('ignore')
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-num_stocks = 100
+num_stocks = 5
 value_name = None
 policy_name = None
 start_date = '20000201'
@@ -87,7 +84,7 @@ if __name__ == '__main__':
             output_path, '{}_policy.h5'.format(args.output_name))
 
     # 포트폴리오 구성 ticker정하고 데이터 불러옴
-    stock_codes = data_manager.get_stock_codes(args.num_stocks)
+    stock_codes = data_manager.get_stock_codes(args.num_stocks, args.end_date)
     price_data, cap_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
 
     # 공통 파라미터 설정

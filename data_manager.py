@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 # db연결
 import pymysql
@@ -19,8 +20,8 @@ COLUMNS_TRAINING_DATA_V3 = ['volume', 'cap', 'foreigner_rate', 'netbuy_instituti
 
 
 # 마지막 시점 기준 시총 상위 n개 ticker 가져옴
-def get_stock_codes(n):
-    stock_codes = capital.iloc[-1].dropna().sort_values(ascending=False).index[:n]
+def get_stock_codes(n, end_date):
+    stock_codes = capital.loc[pd.Timestamp(end_date)].dropna().sort_values(ascending=False).index[:n]
     stock_codes = [i[1:] for i in stock_codes]
     return stock_codes
 
@@ -43,7 +44,7 @@ def get_weights_FFD(d, thres):
         k+=1
     return np.array(w[::-1]).reshape(-1,1)
 
-w = get_weights_FFD(0.6, 1e-5)
+w = get_weights_FFD(0.6, 1e-4)
 def fracDiff_FFD(series):
     width, df = len(w)-1, {}
     for name in series.columns:
@@ -64,7 +65,7 @@ def make_data(stock_codes, start_date, end_date):
     start_date = pd.Timestamp(start_date)
     end_date = pd.Timestamp(end_date)
 
-    for stock_code in stock_codes:
+    for stock_code in tqdm(stock_codes):
         # From local db,. 한종목씩
         price_data, cap_data, training_data = load_data_sql(stock_code, start_date, end_date)  ## 인자 1 ## 인자 2, 3
         # columns
