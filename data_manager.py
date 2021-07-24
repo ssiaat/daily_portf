@@ -62,7 +62,7 @@ def fracDiff_FFD(series):
     df = pd.concat(df, axis=1)
     return df
 
-def make_data(stock_codes, start_date, end_date):
+def make_data(stock_codes, start_date, end_date, stationary):
     training_df = pd.DataFrame()
     price_df = pd.DataFrame()
     cap_df = pd.DataFrame()
@@ -71,7 +71,7 @@ def make_data(stock_codes, start_date, end_date):
 
     for stock_code in tqdm(stock_codes):
         # From local db,. 한종목씩
-        price_data, cap_data, training_data = load_data_sql(stock_code, start_date, end_date)  ## 인자 1 ## 인자 2, 3
+        price_data, cap_data, training_data = load_data_sql(stock_code, start_date, end_date, stationary)  ## 인자 1 ## 인자 2, 3
         # columns
         # cols = [학습대상 특성들]
         # df_unit = df_unit[cols]
@@ -87,7 +87,7 @@ def make_data(stock_codes, start_date, end_date):
 
 
 # load_data_sql 한종목을 읽어오는것.
-def load_data_sql(fpath, date_from, date_to, ver='v3'):
+def load_data_sql(fpath, date_from, date_to, stationary):
 
 
     # fpath는 stock_code 로 받음
@@ -101,7 +101,8 @@ def load_data_sql(fpath, date_from, date_to, ver='v3'):
 
     # 학습 데이터 분리, 전처리
     training_data = preprocessing(data[COLUMNS_TRAINING_DATA_V3])
-    training_data = fracDiff_FFD(training_data)
+    if stationary:
+        training_data = fracDiff_FFD(training_data)
     if date_from > training_data.index[0]:
         training_data = training_data[training_data.index < date_from]
     data = data[(data.index >= training_data.index[0]) & (data.index <= training_data.index[-1])]

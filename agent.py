@@ -61,9 +61,6 @@ class Agent:
         self.base_ks = self.environment.get_ks_to_reset()
         self.win_cnt = 0
 
-    def set100(self, tensor):
-        return tf.cast(tensor / tf.reduce_sum(tensor), dtype='float32')
-
     def set_balance(self, balance):
         self.initial_balance = balance
 
@@ -73,16 +70,17 @@ class Agent:
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
                 self.portfolio_value_each += buy_value * self.TRADING_TAX[0] - sell_value * self.TRADING_TAX[1]
-            self.portfolio_ratio = self.set100(self.portfolio_value_each)
+            self.portfolio_ratio = tf.nn.softmax(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
     def decide_action(self, pred_policy, epsilon):
 
         # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
-        ratio = self.set100(pred_policy)
+        ratio = tf.nn.softmax(pred_policy)
 
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정
-        action = np.where(ratio > self.portfolio_ratio, self.ACTION_BUY, self.ACTION_SELL)
+        diff = ratio - self.portfolio_ratio
+        action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
 
         # 탐험 여부 결정
         exploration = [False] * self.num_ticker
@@ -90,12 +88,14 @@ class Agent:
             exploration = np.random.random((self.num_ticker,)) < epsilon
             random_action = np.where(np.random.random((self.num_ticker,)) > 0.5, 0, 1)
             action = np.where(exploration==1, random_action, action)
-            ratio = self.set100(np.where(exploration==1, tf.reduce_mean(ratio) / 2, ratio))
+            ratio = np.where((action==1) & (exploration==1), self.portfolio_ratio - diff, ratio)
+            ratio = np.where((action==0) & (exploration==1), self.portfolio_ratio + diff, ratio)
+            ratio = tf.nn.softmax(ratio)
 
         # hold 여부 결정
         if self.hold_criter > 0.:
             action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
-            ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
+            ratio = tf.nn.softmax(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
         # 횟수 갱신
         self.num_buy += np.where(action==self.ACTION_BUY, 1, 0)

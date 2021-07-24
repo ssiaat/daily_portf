@@ -21,6 +21,7 @@ class ReinforcementLearner:
                 hold_criter=0., delayed_reward_threshold=.05,
                 num_ticker=100, num_features=7, lr=0.001,
                 value_network=None, policy_network=None,
+                value_network_path=None, policy_network_path=None,
                 output_path='', reuse_models=True):
         # 인자 확인
         assert lr > 0
@@ -64,7 +65,10 @@ class ReinforcementLearner:
         self.itr_cnt = 0
         self.batch_size = 0
         self.learning_cnt = 0
+
         # 로그 등 출력 경로
+        self.value_network_path = value_network_path
+        self.policy_network_path = policy_network_path
         self.output_path = output_path
 
         # action 조정 ([0,1,0,0,1] => [0,3,4,6,9]
@@ -79,8 +83,7 @@ class ReinforcementLearner:
             lr=self.lr, activation=activation)
         if self.reuse_models and \
             os.path.exists(self.value_network_path):
-                self.value_network.load_model(
-                    model_path=self.value_network_path)
+                self.value_network.load_model(model_path=self.value_network_path)
 
     def init_policy_network(self, activation='sigmoid'):
         self.policy_network = DNN(
@@ -122,8 +125,7 @@ class ReinforcementLearner:
         self.environment.observe()
         if len(self.training_data) > self.training_data_idx + 1:
             self.training_data_idx += 1
-            self.sample = self.training_data.iloc[
-                self.training_data_idx].values.reshape((-1,7))
+            self.sample = self.training_data.iloc[self.training_data_idx].values.reshape((-1,7))
             return self.sample
         return None
 
@@ -135,8 +137,12 @@ class ReinforcementLearner:
         # 배치 학습 데이터 생성
         x, y_value, y_policy = self.get_batch(batch_size, delayed_reward, discount_factor)
         if len(x) > 0:
-            value_loss = self.value_network.learn(x, y_value) / 100
+            value_loss = self.value_network.learn(x, y_value)
             policy_loss = self.policy_network.learn(x, y_policy)
+            # if value_loss == 0.:
+            #     print(y_value)
+            #     print(value_loss)
+            #     print()
             return value_loss, policy_loss
         return None
 
@@ -180,8 +186,7 @@ class ReinforcementLearner:
 
             # 학습을 진행할 수록 탐험 비율 감소
             if learning:
-                epsilon = start_epsilon \
-                    * (1. - float(epoch) / (num_epoches - 1))
+                epsilon = start_epsilon  * (1. - float(epoch) / (num_epoches - 1))
             else:
                 epsilon = start_epsilon
 
@@ -268,11 +273,9 @@ class ReinforcementLearner:
                 max_pv=max_portfolio_value, cnt_win=epoch_win_cnt))
 
     def save_models(self):
-        if self.value_network is not None and \
-                self.value_network_path is not None:
+        if self.value_network is not None and self.value_network_path is not None:
             self.value_network.save_model(self.value_network_path)
-        if self.policy_network is not None and \
-                self.policy_network_path is not None:
+        if self.policy_network is not None and self.policy_network_path is not None:
             self.policy_network.save_model(self.policy_network_path)
 
 class A2CLearner(ReinforcementLearner):
@@ -300,10 +303,10 @@ class A2CLearner(ReinforcementLearner):
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward) in enumerate(memory):
             x[i] = np.array(sample)
-            r = (delayed_reward + reward_next - reward * 2)
+            r = (delayed_reward + reward_next - reward * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
-            y_policy[i] = sigmoid(advantage)
+            y_policy[i] = tf.nn.softmax(advantage)
             value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
             reward_next = reward
 

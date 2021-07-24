@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-num_stocks = 200
+num_stocks = 20
 value_name = None
 policy_name = None
 start_date = '20000201'
@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--policy_network_name', default=policy_name)
     parser.add_argument('--reuse_models', action='store_true')
     parser.add_argument('--learning', action='store_true')
+    parser.add_argument('--stationary', action='store_true')
     parser.add_argument('--start_date', default=start_date)
     parser.add_argument('--end_date', default=end_date)
     args = parser.parse_args()
@@ -86,18 +87,16 @@ if __name__ == '__main__':
     # 포트폴리오 구성 ticker정하고 데이터 불러옴
     stock_codes = data_manager.get_stock_codes(args.num_stocks, args.end_date)
     print(f'{len(stock_codes)} stocks in universe')
-    price_data, cap_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date)
+    price_data, cap_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date, args.stationary)
 
     # 공통 파라미터 설정
     common_params = {'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
                      'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes), 'hold_criter': args.hold_criter,
-                     'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models}
+                     'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models,
+                     'price_data': price_data, 'cap_data': cap_data, 'ks_data' : ks_data, 'training_data': training_data,
+                     'value_network_path': value_network_path, 'policy_network_path': policy_network_path}
 
-    # 강화학습 시작
-    common_params.update({'price_data': price_data, 'cap_data': cap_data,
-                          'ks_data' : ks_data, 'training_data': training_data})
-
-    learner = A2CLearner(**{**common_params, 'value_network_path': value_network_path, 'policy_network_path': policy_network_path})
+    learner = A2CLearner(**{**common_params})
     if learner is not None:
         learner.run(balance=args.balance,
                     num_epoches=args.num_epoches,
