@@ -82,7 +82,7 @@ class Agent:
 
         # 탐험 여부 결정
         exploration = [False] * self.num_ticker
-        if np.random.rand() < epsilon:
+        if np.random.rand() < 0.5:
             exploration = np.random.random((self.num_ticker,)) < epsilon
             random_action = np.where(np.random.random((self.num_ticker,)) > 0.5, 0, 1)
             action = np.where(exploration==1, random_action, action)
@@ -136,8 +136,8 @@ class Agent:
         if self.profitloss > 0:
             self.win_cnt += 1
 
-        # 즉시 보상 - ks200 대비 아웃퍼폼
-        self.immediate_reward = self.profitloss * tf.nn.softmax(tf.abs(self.portfolio_ratio - self.base_portfolio_ratio))
+        # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
+        self.immediate_reward = self.profitloss * tf.abs(self.portfolio_ratio - self.base_portfolio_ratio)
 
         # 지연 보상 - 익절, 손절 기준
         delayed_reward = 0

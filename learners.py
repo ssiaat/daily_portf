@@ -75,7 +75,7 @@ class ReinforcementLearner:
         # action 조정 ([0,1,0,0,1] => [0,3,4,6,9]
         self.modify_action_idx = np.array([i*2 for i in range(self.num_ticker)])
 
-    def init_value_network(self, activation='sigmoid'):
+    def init_value_network(self, activation='linear'):
         self.value_network = DNN(
             input_dim=self.num_features,
             output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
@@ -149,6 +149,9 @@ class ReinforcementLearner:
         if batch_size > 0:
             value_loss, policy_loss = self.update_networks(batch_size, delayed_reward, discount_factor)
             self.value_loss += value_loss
+            # 기간이 길어짐에 따라 value_loss값 매우 커지는 것 방지
+            if self.value_loss > 1e10:
+                self.value_loss /= 1e5
             self.policy_loss += policy_loss
             self.learning_cnt += 1
             self.memory_learning_idx.append(self.training_data_idx)
@@ -230,7 +233,7 @@ class ReinforcementLearner:
                 # 지연 보상 발생된 경우 미니 배치 학습
                 if learning and (tf.reduce_sum(delayed_reward) != 0):
                     self.fit(delayed_reward, discount_factor)
-            print(pred_policy)
+
             # 에포크 종료 후 학습
             if learning:
                 self.fit(self.agent.profitloss * self.agent.portfolio_ratio, discount_factor, full=True)
@@ -297,7 +300,7 @@ class A2CLearner(ReinforcementLearner):
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward) in enumerate(memory):
             x[i] = np.array(sample)
-            r = (delayed_reward + reward_next - reward * 2) * 10
+            r = (delayed_reward + reward_next - reward * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
             y_policy[i] = tf.nn.softmax(advantage)
