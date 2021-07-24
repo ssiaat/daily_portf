@@ -51,7 +51,8 @@ class Network:
 class DNN(Network):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        inp = [Input(shape=(self.input_dim,)) for i in range(self.num_ticker)]
+        self.sub_models = [self.mini_dnn() for _ in range(self.num_ticker)]
+        inp = [Input(shape=(self.input_dim,)) for _ in range(self.num_ticker)]
         self.model = self.get_network(inp)
 
     def residual_layer(self, inp, hidden_size):
@@ -63,17 +64,16 @@ class DNN(Network):
         output = BatchNormalization(trainable=self.trainable)(output)
         return output + output_r
 
-    def mini_dnn(self, inp):
-        # output = self.residual_layer(inp, 128)
-        # output = self.residual_layer(output, 32)
-        output = Dense(128, activation=self.activation, kernel_initializer=self.initializer)(inp)
-        output = BatchNormalization(trainable=self.trainable)(output)
-        output = Dense(32, activation=self.activation, kernel_initializer=self.initializer)(output)
-        return output
+    def mini_dnn(self):
+        model = Sequential()
+        model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
+        model.add(BatchNormalization(trainable=self.trainable))
+        model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
+        return model
 
     def get_network(self, inp):
         if self.split_model:
-            output = concatenate([self.mini_dnn(tf.reshape(i, (-1, self.input_dim))) for i in inp])
+            output = concatenate([m(i) for i,m in zip(inp, self.sub_models)])
         else:
             output = tf.reshape(inp, (-1, self.num_ticker * self.input_dim))
         output = self.residual_layer(output, 2048)
