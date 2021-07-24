@@ -303,7 +303,7 @@ class A2CLearner(ReinforcementLearner):
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward) in enumerate(memory):
             x[i] = np.array(sample)
-            r = (delayed_reward + reward_next - reward * 2) * 100
+            r = (delayed_reward + reward_next - reward * 2)
             y_value[i, action] = r + discount_factor * value_max_next
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
             y_policy[i] = tf.nn.softmax(advantage)

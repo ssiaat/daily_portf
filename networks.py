@@ -51,12 +51,7 @@ class DNN(Network):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         inp = [Input(shape=(self.input_dim,)) for i in range(self.num_ticker)]
-
-        output = self.get_network_head(inp).output
-        output = Dense(
-            self.output_dim, activation=self.activation_last,
-            kernel_initializer=self.initializer)(output)
-        self.model = Model(inp, output)
+        self.model = self.get_network(inp)
 
     def residual_layer(self, inp, hidden_size):
         output_r = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(inp)
@@ -68,15 +63,22 @@ class DNN(Network):
         return output + output_r
 
     def mini_dnn(self, inp):
-        output = self.residual_layer(inp, 128)
-        output = self.residual_layer(output, 32)
+        # output = self.residual_layer(inp, 128)
+        # output = self.residual_layer(output, 32)
+        output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(inp)
+        output = BatchNormalization(trainable=self.trainable)(output)
+        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = BatchNormalization(trainable=self.trainable)(output)
+        output = Dense(64, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = BatchNormalization(trainable=self.trainable)(output)
         return output
 
-    def get_network_head(self, inp):
+    def get_network(self, inp):
         output = concatenate([self.mini_dnn(tf.reshape(i, (-1, self.input_dim))) for i in inp])
         # output = self.residual_layer(output, 2048)
         output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
         output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = BatchNormalization(trainable=self.trainable)(output)
+        output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
