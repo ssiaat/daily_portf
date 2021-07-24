@@ -16,7 +16,7 @@ class ReinforcementLearner:
     __metaclass__ = abc.ABCMeta
     lock = threading.Lock()
 
-    def __init__(self, trainable=False,
+    def __init__(self, trainable=False, split_model=False,
                 price_data=None, cap_data=None, ks_data=None, training_data=None,
                 hold_criter=0., delayed_reward_threshold=.05,
                 num_ticker=100, num_features=7, lr=0.001,
@@ -48,6 +48,7 @@ class ReinforcementLearner:
         self.lr = lr
         self.value_network = value_network
         self.policy_network = policy_network
+        self.split_model = split_model
         self.reuse_models = reuse_models
 
         # 메모리
@@ -79,18 +80,18 @@ class ReinforcementLearner:
             input_dim=self.num_features,
             output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
             num_ticker=self.num_ticker,
-            trainable=self.trainable,
+            trainable=self.trainable, split_model=self.split_model,
             lr=self.lr, activation=activation)
         if self.reuse_models and \
             os.path.exists(self.value_network_path):
                 self.value_network.load_model(model_path=self.value_network_path)
 
-    def init_policy_network(self, activation='sigmoid'):
+    def init_policy_network(self, activation='softmax'):
         self.policy_network = DNN(
             input_dim=self.num_features,
             output_dim=self.num_ticker,
             num_ticker=self.num_ticker,
-            trainable=self.trainable,
+            trainable=self.trainable, split_model=self.split_model,
             lr=self.lr, activation=activation)
         if self.reuse_models and \
             os.path.exists(self.policy_network_path):
@@ -139,10 +140,6 @@ class ReinforcementLearner:
         if len(x) > 0:
             value_loss = self.value_network.learn(x, y_value)
             policy_loss = self.policy_network.learn(x, y_policy)
-            # if value_loss == 0.:
-            #     print(y_value)
-            #     print(value_loss)
-            #     print()
             return value_loss, policy_loss
         return None
 
@@ -189,7 +186,7 @@ class ReinforcementLearner:
                 epsilon = start_epsilon  * (1. - float(epoch) / (num_epoches - 1))
             else:
                 epsilon = start_epsilon
-
+            cnt = 1
             while True:
                 # 샘플 생성
                 next_sample = self.build_sample()
@@ -198,15 +195,13 @@ class ReinforcementLearner:
                 next_sample = np.split(next_sample, self.num_ticker, axis=0)
 
                 # 가치, 정책 신경망 예측
-                pred_value = None
-                pred_policy = None
                 curr_cap = self.environment.get_cap()
                 curr_cap_value = np.tile(curr_cap.reshape(-1, 1), 2).reshape(-1,)
 
-                if self.value_network is not None:
-                    pred_value = self.value_network.predict(next_sample) * curr_cap_value
-                if self.policy_network is not None:
-                    pred_policy = self.policy_network.predict(next_sample) * curr_cap
+                pred_value = self.value_network.predict(next_sample) * curr_cap_value
+                # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
+                pred_policy = self.policy_network.predict(next_sample)
+                pred_policy = tf.nn.softmax(pred_policy * curr_cap)
 
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                 self.agent.renewal_portfolio_ratio(transaction=False)

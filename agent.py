@@ -29,12 +29,13 @@ class Agent:
         self.balance = 0  # 현재 현금 잔고
         self.num_stocks = np.zeros((self.num_ticker,))  # 보유 주식 수
         self.portfolio_ratio = np.zeros((self.num_ticker,))
+        self.base_portfolio_ratio = np.zeros((self.num_ticker,))
+
         # 포트폴리오 가치: balance + num_stocks * {현재 주식 가격}
         self.portfolio_value = 0 
         self.base_portfolio_value = 0  # 직전 학습 시점의 PV
         # 종목마다 포트폴리오 가치 (balance고려 안됨)
         self.portfolio_value_each = np.zeros((self.num_ticker,))
-        self.base_portfolio_value_each = np.zeros((self.num_ticker,))
 
         self.num_buy = np.zeros((self.num_ticker,))  # 매수 횟수
         self.num_sell = np.zeros((self.num_ticker,))  # 매도 횟수
@@ -52,7 +53,7 @@ class Agent:
         self.portfolio_value = self.initial_balance
         self.base_portfolio_value = self.initial_balance
         self.portfolio_value_each = np.zeros((self.num_ticker,))
-        self.base_portfolio_value_each = np.zeros((self.num_ticker,))
+        self.base_portfolio_ratio = np.zeros((self.num_ticker,))
 
         self.num_buy = np.zeros((self.num_ticker,))
         self.num_sell = np.zeros((self.num_ticker,))
@@ -69,17 +70,14 @@ class Agent:
             curr_price = self.environment.get_price()
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
-                self.portfolio_value_each += buy_value * self.TRADING_TAX[0] - sell_value * self.TRADING_TAX[1]
+                self.portfolio_value_each -= buy_value * self.TRADING_TAX[0] + sell_value * self.TRADING_TAX[1]
             self.portfolio_ratio = tf.nn.softmax(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
     def decide_action(self, pred_policy, epsilon):
-
-        # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
-        ratio = tf.nn.softmax(pred_policy)
-
+        ratio = pred_policy
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정
-        diff = ratio - self.portfolio_ratio
+        diff = pred_policy - self.portfolio_ratio
         action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
 
         # 탐험 여부 결정
@@ -88,7 +86,7 @@ class Agent:
             exploration = np.random.random((self.num_ticker,)) < epsilon
             random_action = np.where(np.random.random((self.num_ticker,)) > 0.5, 0, 1)
             action = np.where(exploration==1, random_action, action)
-            ratio = np.where((action==1) & (exploration==1), self.portfolio_ratio - diff, ratio)
+            ratio = np.where((action==1) & (exploration==1), self.portfolio_ratio - diff, pred_policy)
             ratio = np.where((action==0) & (exploration==1), self.portfolio_ratio + diff, ratio)
             ratio = tf.nn.softmax(ratio)
 
@@ -119,7 +117,7 @@ class Agent:
         # 즉시 보상 초기화
         self.immediate_reward = 0
 
-        # 거래 수량, 금액 결정, 거래세 매수:0.015%, 매도:0.25%
+        # 거래 수량, 금액 결정
         buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
         self.num_stocks += buy_unit - sell_unit
         buy_value = tf.reduce_sum(buy_unit * curr_price) * (1 - self.TRADING_TAX[0])
@@ -139,13 +137,14 @@ class Agent:
             self.win_cnt += 1
 
         # 즉시 보상 - ks200 대비 아웃퍼폼
-        self.immediate_reward = self.profitloss * self.portfolio_ratio
+        self.immediate_reward = self.profitloss * tf.nn.softmax(tf.abs(self.portfolio_ratio - self.base_portfolio_ratio))
 
         # 지연 보상 - 익절, 손절 기준
         delayed_reward = 0
         if self.profitloss > self.delayed_reward_threshold or self.profitloss < -self.delayed_reward_threshold / 2:
             # 목표 수익률 달성하여 기준 포트폴리오 가치 갱신
             # 또는 손실 기준치를 초과하여 기준 포트폴리오 가치 갱신
+            self.base_portfolio_ratio = self.portfolio_ratio
             self.base_portfolio_value = self.portfolio_value
             self.base_ks = ks_now
             delayed_reward = self.immediate_reward
