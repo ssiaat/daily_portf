@@ -34,8 +34,7 @@ class ReinforcementLearner:
         self.ks_ret = ((ks_data.iloc[-1] - ks_data.iloc[0]) / ks_data.iloc[0]).values[0]
 
         # 에이전트 설정
-        self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter,
-                    delayed_reward_threshold=delayed_reward_threshold)
+        self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter, delayed_reward_threshold=delayed_reward_threshold)
         # 학습 데이터
         self.training_data = training_data
         self.total_len = len(training_data.index)  # 전체 학습 기간의 날짜 수
@@ -57,6 +56,8 @@ class ReinforcementLearner:
         self.memory_reward = []
         self.memory_value = []
         self.memory_policy = []
+        self.memory_cap_policy = []
+        self.memory_cap_value = []
         self.memory_pv = []
         self.memory_num_stocks = []
         self.memory_learning_idx = []
@@ -77,26 +78,17 @@ class ReinforcementLearner:
 
     def init_value_network(self, activation='linear'):
         self.value_network = DNN(
-            input_dim=self.num_features,
-            output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
-            num_ticker=self.num_ticker,
-            trainable=self.trainable, split_model=self.split_model,
+            input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
+            num_ticker=self.num_ticker, trainable=self.trainable, split_model=self.split_model,
             lr=self.lr, activation=activation)
-        if self.reuse_models and \
-            os.path.exists(self.value_network_path):
+        if self.reuse_models and os.path.exists(self.value_network_path):
                 self.value_network.load_model(model_path=self.value_network_path)
 
-    def init_policy_network(self, activation='softmax'):
-        self.policy_network = DNN(
-            input_dim=self.num_features,
-            output_dim=self.num_ticker,
-            num_ticker=self.num_ticker,
-            trainable=self.trainable, split_model=self.split_model,
-            lr=self.lr, activation=activation)
-        if self.reuse_models and \
-            os.path.exists(self.policy_network_path):
-            self.policy_network.load_model(
-                model_path=self.policy_network_path)
+    def init_policy_network(self, activation='linear'):
+        self.policy_network = DNN(input_dim=self.num_features, output_dim=self.num_ticker, num_ticker=self.num_ticker,
+            trainable=self.trainable, split_model=self.split_model, lr=self.lr, activation=activation)
+        if self.reuse_models and os.path.exists(self.policy_network_path):
+            self.policy_network.load_model(model_path=self.policy_network_path)
 
     def reset(self):
         self.sample = None
@@ -112,6 +104,8 @@ class ReinforcementLearner:
         self.memory_reward = []
         self.memory_value = []
         self.memory_policy = []
+        self.memory_cap_policy = []
+        self.memory_cap_value = []
         self.memory_pv = []
         self.memory_num_stocks = []
         self.memory_learning_idx = []
@@ -149,9 +143,6 @@ class ReinforcementLearner:
         if batch_size > 0:
             value_loss, policy_loss = self.update_networks(batch_size, delayed_reward, discount_factor)
             self.value_loss += value_loss
-            # 기간이 길어짐에 따라 value_loss값 매우 커지는 것 방지
-            if self.value_loss > 1e10:
-                self.value_loss /= 1e5
             self.policy_loss += policy_loss
             self.learning_cnt += 1
             self.memory_learning_idx.append(self.training_data_idx)
@@ -223,6 +214,8 @@ class ReinforcementLearner:
                     self.memory_value.append(pred_value)
                 if self.policy_network is not None:
                     self.memory_policy.append(pred_policy)
+                self.memory_cap_value.append(curr_cap_value)
+                self.memory_cap_policy.append(curr_cap)
                 self.memory_pv.append(self.agent.portfolio_value)
                 self.memory_num_stocks.append(self.agent.num_stocks)
 
@@ -236,7 +229,8 @@ class ReinforcementLearner:
 
             # 에포크 종료 후 학습
             if learning:
-                self.fit(self.agent.profitloss * self.agent.portfolio_ratio, discount_factor, full=True)
+                self.fit(self.agent.profitloss * tf.abs(self.agent.portfolio_ratio - self.agent.base_portfolio_ratio), discount_factor, full=True)
+
             # 에포크 관련 정보 로그 기록
             num_epoches_digit = len(str(num_epoches))
             epoch_str = str(epoch + 1).rjust(num_epoches_digit, '0')
@@ -251,7 +245,7 @@ class ReinforcementLearner:
                     epoch_str, num_epoches, epsilon, self.agent.portfolio_value,
                     pv_ret, self.ks_ret, self.agent.win_cnt, self.total_len,
                     self.learning_cnt, self.value_loss, self.policy_loss, elapsed_time_epoch))
-
+            exit()
             # 학습 관련 정보 갱신
             max_portfolio_value = max(
                 max_portfolio_value, self.agent.portfolio_value)
@@ -292,18 +286,19 @@ class A2CLearner(ReinforcementLearner):
             reversed(self.memory_value[-batch_size:]),
             reversed(self.memory_policy[-batch_size:]),
             reversed(self.memory_reward[-batch_size:]),
+            reversed(self.memory_cap_policy[-batch_size:])
         )
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_features))
         y_value = np.zeros((batch_size, self.num_ticker * self.agent.NUM_ACTIONS))
         y_policy = np.zeros((batch_size, self.num_ticker))
         value_max_next = np.zeros((self.num_ticker,))
         reward_next = self.memory_reward[-1]
-        for i, (sample, action, value, policy, reward) in enumerate(memory):
+        for i, (sample, action, value, policy, reward, cap_policy) in enumerate(memory):
             x[i] = np.array(sample)
             r = (delayed_reward + reward_next - reward * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
-            y_policy[i] = tf.nn.softmax(advantage)
+            y_policy[i] = tf.nn.softmax(advantage * cap_policy)
             value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
             reward_next = reward
 

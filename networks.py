@@ -5,7 +5,7 @@ print(f'Keras Backend : {os.environ["KERAS_BACKEND"]}')
 
 from keras.models import Model, Sequential
 from keras.layers import Dense,BatchNormalization, concatenate
-from tensorflow.keras.initializers import he_uniform, he_normal
+from tensorflow.keras.initializers import he_normal
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import mean_squared_error as mse
 from keras import Input
@@ -35,7 +35,7 @@ class Network:
         with tf.GradientTape() as tape:
             # 가치 신경망 갱신
             output = self.model(x)
-            loss = self.loss(y, output)
+            loss = tf.sqrt(self.loss(y, output))
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
         return tf.reduce_mean(loss)
@@ -66,7 +66,7 @@ class DNN(Network):
 
     def mini_dnn(self):
         model = Sequential()
-        model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
+        model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
         model.add(BatchNormalization(trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
         return model
@@ -76,10 +76,7 @@ class DNN(Network):
             output = concatenate([m(i) for i,m in zip(inp, self.sub_models)])
         else:
             output = tf.reshape(inp, (-1, self.num_ticker * self.input_dim))
-        output = self.residual_layer(output, 2048)
-        output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
-        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = BatchNormalization(trainable=self.trainable)(output)
+        output = self.residual_layer(output, 256)
         output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
