@@ -5,7 +5,7 @@ print(f'Keras Backend : {os.environ["KERAS_BACKEND"]}')
 
 from keras.models import Model, Sequential
 from keras.layers import Dense,BatchNormalization, concatenate
-from tensorflow.keras.initializers import he_normal
+from tensorflow.keras.initializers import he_normal, glorot_normal
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import mean_squared_error as mse
 from keras import Input
@@ -22,7 +22,7 @@ class Network:
         self.split_model = split_model
         self.loss = mse
         self.model = None
-        self.initializer = he_normal()
+        self.initializer = glorot_normal()
         self.activation = 'relu'
         self.activation_last = activation
         self.optimizer = Adam(lr)
@@ -34,8 +34,13 @@ class Network:
     def learn(self, x, y):
         with tf.GradientTape() as tape:
             # 가치 신경망 갱신
-            output = self.model(x)
+            output = self.model(x) + 1e-4
             loss = tf.sqrt(self.loss(y, output))
+            output_t = tf.where(tf.math.is_nan(output)==True, 1, 0)
+            # print(self.model.trainable_variables[0][0])
+            if tf.reduce_sum(output_t) > 0:
+                print('there is nan')
+                exit()
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
         return tf.reduce_mean(loss)
@@ -69,6 +74,7 @@ class DNN(Network):
         model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
         model.add(BatchNormalization(trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
+        model.add(BatchNormalization(trainable=self.trainable))
         return model
 
     def get_network(self, inp):

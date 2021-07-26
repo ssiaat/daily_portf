@@ -1,8 +1,8 @@
 # import data_manager
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
-from statsmodels.tsa.stattools import adfuller
-import pandas as pd
+# from statsmodels.tsa.stattools import adfuller
+# import pandas as pd
 
 # out = pd.DataFrame(columns=['adfStat', 'pVal', 'lags', 'nObs', '95%conf', 'corr'])
 # df = data_manager.ks200
@@ -17,4 +17,7 @@ import pandas as pd
 # df = (df - df.min()) / (df.max() - df.min())
 # plt.plot(df)
 # print(list(df.index).index(pd.Timestamp('20210630')))
-from datetime import datetime
+# from datetime import datetime
+a = [1,2,3]
+b = [2,3,4]
+print(ab)

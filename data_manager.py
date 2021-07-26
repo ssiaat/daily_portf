@@ -24,8 +24,8 @@ def get_stock_codes(n, end_date):
     last_idx = list(capital.index).index(pd.Timestamp(end_date))
     stock_codes_last = capital.iloc[last_idx].dropna().sort_values(ascending=False).index[:n]
     start_idx = last_idx - 300 if last_idx >= 300 else 0
-    stock_code_start = capital.iloc[start_idx].dropna().index
-    stock_codes = list(set(stock_codes_last) & set(stock_code_start))
+    stock_codes_start = capital.iloc[start_idx].dropna().index
+    stock_codes = [x for x in stock_codes_last if x in stock_codes_start]
     stock_codes = [i[1:] for i in stock_codes]
     return stock_codes
 
@@ -94,6 +94,7 @@ def load_data_sql(fpath, date_from, date_to, stationary):
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
     data = pd.read_sql(sql=sql, con=conn)
     data['ks200'] = ks200.kospi.values
+    t = data.iloc[389:393].date
 
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
@@ -101,10 +102,11 @@ def load_data_sql(fpath, date_from, date_to, stationary):
 
     # 학습 데이터 분리, 전처리
     training_data = preprocessing(data[COLUMNS_TRAINING_DATA_V3])
+
     if stationary:
         training_data = fracDiff_FFD(training_data)
     if date_from > training_data.index[0]:
-        training_data = training_data[training_data.index < date_from]
+        training_data = training_data[training_data.index > date_from]
     data = data[(data.index >= training_data.index[0]) & (data.index <= training_data.index[-1])]
 
     # 차트 데이터 분리

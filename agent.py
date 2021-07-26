@@ -65,35 +65,38 @@ class Agent:
     def set_balance(self, balance):
         self.initial_balance = balance
 
+    def set100(self, tensor):
+        return tensor / tf.reduce_sum(tensor)
+
     def renewal_portfolio_ratio(self, transaction, buy_value=None, sell_value=None):
         if tf.reduce_sum(self.num_stocks) > 0:
             curr_price = self.environment.get_price()
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
                 self.portfolio_value_each -= buy_value * self.TRADING_TAX[0] + sell_value * self.TRADING_TAX[1]
-            self.portfolio_ratio = tf.nn.softmax(self.portfolio_value_each)
+            self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
-    def decide_action(self, pred_policy, epsilon):
-        ratio = pred_policy
+    def decide_action(self, ratio, epsilon):
+
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정
-        diff = pred_policy - self.portfolio_ratio
+        diff = ratio - self.portfolio_ratio
         action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
 
         # 탐험 여부 결정
         exploration = [False] * self.num_ticker
         if np.random.rand() < 0.5:
             exploration = np.random.random((self.num_ticker,)) < epsilon
-            random_action = np.where(np.random.random((self.num_ticker,)) > 0.5, 0, 1)
-            action = np.where(exploration==1, random_action, action)
-            ratio = np.where((action==1) & (exploration==1), self.portfolio_ratio - diff, pred_policy)
-            ratio = np.where((action==0) & (exploration==1), self.portfolio_ratio + diff, ratio)
-            ratio = tf.nn.softmax(ratio)
+            random_action = np.random.random((self.num_ticker,)) < 0.5
+            action = np.where(exploration == 1, random_action, action)
+            ratio = np.where((action == 1) & (exploration == 1), self.portfolio_ratio - diff, ratio)
+            ratio_ = np.where((action == 0) & (exploration == 1), self.portfolio_ratio + diff, ratio)
+            ratio = self.set100(ratio_)
 
         # hold 여부 결정
         if self.hold_criter > 0.:
             action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
-            ratio = tf.nn.softmax(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
+            ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
         # 횟수 갱신
         self.num_buy += np.where(action==self.ACTION_BUY, 1, 0)
@@ -103,7 +106,9 @@ class Agent:
         return action, ratio, exploration
 
     def decide_trading_unit(self, ratio, curr_price):
-        sell_trading_unit = tf.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * self.portfolio_value_each / np.where(curr_price==0., 1., curr_price))
+        sell_trading_unit = tf.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * self.portfolio_value_each / np.where(curr_price == 0., 1., curr_price))
+        # 거래정지 상태인데 거래하는 경우 방지
+        sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
         sell_trading_value = curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1])
         buy_trading_unit = tf.floor(tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10) * (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price==0., 1., curr_price))
 
@@ -126,8 +131,7 @@ class Agent:
 
         # 포트폴리오 가치 갱신, 거래세 반영
         self.renewal_portfolio_ratio(transaction=True, buy_value=buy_value, sell_value=sell_value)
-        
-        
+
         # ks200 대비 수익률로 보상 결정
         ks_now = self.environment.get_ks()
         ks_ret = (ks_now - self.base_ks) / self.base_ks
@@ -138,7 +142,6 @@ class Agent:
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
         self.immediate_reward = self.profitloss * tf.abs(self.portfolio_ratio - self.base_portfolio_ratio)
-
         # 지연 보상 - 익절, 손절 기준
         delayed_reward = 0
         if self.profitloss > self.delayed_reward_threshold or self.profitloss < -self.delayed_reward_threshold / 2:
@@ -152,3 +155,6 @@ class Agent:
             delayed_reward = np.zeros((self.num_ticker,))
 
         return self.immediate_reward, delayed_reward
+
+    def tf2np(self, tensor):
+        return tf.make_ndarray(tf.make_tensor_proto(tensor))

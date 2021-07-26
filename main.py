@@ -13,11 +13,11 @@ warnings.filterwarnings('ignore')
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-num_stocks = 20
+num_stocks = 200
 value_name = None
 policy_name = None
 start_date = '20000201'
-end_date = '20101230'
+end_date = '20151230'
 
 if __name__ == '__main__':
 
@@ -99,9 +99,5 @@ if __name__ == '__main__':
 
     learner = A2CLearner(**{**common_params})
     if learner is not None:
-        learner.run(balance=args.balance,
-                    num_epoches=args.num_epoches,
-                    discount_factor=args.discount_factor,
-                    start_epsilon=args.start_epsilon,
-                    learning=args.learning)
+        learner.run(balance=args.balance, num_epoches=args.num_epoches, discount_factor=args.discount_factor, start_epsilon=args.start_epsilon, learning=args.learning)
         learner.save_models()

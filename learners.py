@@ -5,7 +5,8 @@ import abc
 import threading
 import time
 import numpy as np
-from utils import sigmoid
+import pandas as pd
+
 from environment import Environment
 from agent import Agent
 from networks import DNN
@@ -57,7 +58,6 @@ class ReinforcementLearner:
         self.memory_value = []
         self.memory_policy = []
         self.memory_cap_policy = []
-        self.memory_cap_value = []
         self.memory_pv = []
         self.memory_num_stocks = []
         self.memory_learning_idx = []
@@ -105,7 +105,6 @@ class ReinforcementLearner:
         self.memory_value = []
         self.memory_policy = []
         self.memory_cap_policy = []
-        self.memory_cap_value = []
         self.memory_pv = []
         self.memory_num_stocks = []
         self.memory_learning_idx = []
@@ -180,7 +179,7 @@ class ReinforcementLearner:
                 epsilon = start_epsilon  * (1. - float(epoch) / (num_epoches - 1))
             else:
                 epsilon = start_epsilon
-            cnt = 1
+
             while True:
                 # 샘플 생성
                 next_sample = self.build_sample()
@@ -195,14 +194,13 @@ class ReinforcementLearner:
                 pred_value = self.value_network.predict(next_sample) * curr_cap_value
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pred_policy = self.policy_network.predict(next_sample)
-                pred_policy = tf.nn.softmax(pred_policy * curr_cap)
+                pred_policy = self.agent.set100(tf.nn.softmax(pred_policy) * curr_cap)
 
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                 self.agent.renewal_portfolio_ratio(transaction=False)
 
                 # 신경망 또는 탐험에 의한 행동 결정
                 action, ratio, exploration = self.agent.decide_action(pred_policy, epsilon)
-
                 # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
                 immediate_reward, delayed_reward = self.agent.act(ratio)
 
@@ -214,7 +212,6 @@ class ReinforcementLearner:
                     self.memory_value.append(pred_value)
                 if self.policy_network is not None:
                     self.memory_policy.append(pred_policy)
-                self.memory_cap_value.append(curr_cap_value)
                 self.memory_cap_policy.append(curr_cap)
                 self.memory_pv.append(self.agent.portfolio_value)
                 self.memory_num_stocks.append(self.agent.num_stocks)
@@ -245,7 +242,7 @@ class ReinforcementLearner:
                     epoch_str, num_epoches, epsilon, self.agent.portfolio_value,
                     pv_ret, self.ks_ret, self.agent.win_cnt, self.total_len,
                     self.learning_cnt, self.value_loss, self.policy_loss, elapsed_time_epoch))
-            exit()
+
             # 학습 관련 정보 갱신
             max_portfolio_value = max(
                 max_portfolio_value, self.agent.portfolio_value)
@@ -296,9 +293,9 @@ class A2CLearner(ReinforcementLearner):
         for i, (sample, action, value, policy, reward, cap_policy) in enumerate(memory):
             x[i] = np.array(sample)
             r = (delayed_reward + reward_next - reward * 2) * 100
-            y_value[i, action] = r + discount_factor * value_max_next
+            y_value[i, action] = r + discount_factor * value_max_next * cap_policy
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
-            y_policy[i] = tf.nn.softmax(advantage * cap_policy)
+            y_policy[i] = self.agent.set100(tf.nn.softmax(advantage) * cap_policy)
             value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
             reward_next = reward
 
