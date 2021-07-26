@@ -58,6 +58,7 @@ class ReinforcementLearner:
         self.memory_policy = []
         self.memory_cap_policy = []
         self.memory_pv = []
+        self.memory_pr = []
         self.memory_num_stocks = []
         self.memory_learning_idx = []
         # 에포크 관련 정보
@@ -105,6 +106,7 @@ class ReinforcementLearner:
         self.memory_policy = []
         self.memory_cap_policy = []
         self.memory_pv = []
+        self.memory_pr = []
         self.memory_num_stocks = []
         self.memory_learning_idx = []
         # 에포크 관련 정보 초기화
@@ -196,12 +198,14 @@ class ReinforcementLearner:
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pred_policy = self.policy_network.predict(next_sample)
                 pred_policy = self.agent.set100(tf.nn.softmax(pred_policy) * curr_cap)
+                pred_policy = self.agent.similar_with_cap(pred_policy)
 
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                 self.agent.renewal_portfolio_ratio(transaction=False)
 
                 # 신경망 또는 탐험에 의한 행동 결정
-                action, ratio, exploration = self.agent.decide_action(pred_policy, epsilon)
+                action, ratio, exploration = self.agent.decide_action(pred_policy, curr_cap, epsilon)
+
                 # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
                 immediate_reward, delayed_reward = self.agent.get_reward()
                 self.agent.act(ratio)
@@ -210,10 +214,8 @@ class ReinforcementLearner:
                 self.memory_sample.append(next_sample)
                 self.memory_action.append(action + self.modify_action_idx)
                 self.memory_reward.append(immediate_reward)
-                if self.value_network is not None:
-                    self.memory_value.append(pred_value)
-                if self.policy_network is not None:
-                    self.memory_policy.append(pred_policy)
+                self.memory_value.append(pred_value)
+                self.memory_policy.append(pred_policy)
                 self.memory_cap_policy.append(curr_cap)
                 self.memory_pv.append(self.agent.portfolio_value)
                 self.memory_num_stocks.append(self.agent.num_stocks)
@@ -230,7 +232,7 @@ class ReinforcementLearner:
             if learning:
                 self.fit(self.agent.profitloss * tf.abs(self.agent.portfolio_ratio - self.agent.base_portfolio_ratio), discount_factor, full=True)
             print(self.agent.portfolio_ratio)
-            
+
             # 에포크 관련 정보 로그 기록
             num_epoches_digit = len(str(num_epoches))
             epoch_str = str(epoch + 1).rjust(num_epoches_digit, '0')

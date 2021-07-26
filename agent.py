@@ -69,6 +69,13 @@ class Agent:
     def set100(self, tensor):
         return tensor / tf.reduce_sum(tensor)
 
+    def similar_with_cap(self, ratio):
+        curr_cap = self.environment.get_cap()
+        curr_price = self.environment.get_price()
+        ratio = tf.clip_by_value(ratio, curr_cap - 0.02, curr_cap + 0.02)
+        ratio = self.set100(tf.where(curr_price == 0., 0., ratio))
+        return ratio
+
     def renewal_portfolio_ratio(self, transaction, buy_value_each=None):
         if tf.reduce_sum(self.num_stocks) > 0:
             curr_price = self.environment.get_price()
@@ -79,7 +86,9 @@ class Agent:
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
-    def decide_action(self, ratio, epsilon):
+    def decide_action(self, ratio, curr_cap, epsilon):
+        curr_price = self.environment.get_price()
+
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
         diff = tf.clip_by_value(abs(ratio - self.portfolio_ratio), 0, tf.reduce_mean(ratio) / 2)
         action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
@@ -90,6 +99,7 @@ class Agent:
             exploration = np.random.random((self.num_ticker,)) < epsilon
             random_action = np.random.random((self.num_ticker,)) < 0.5
             action = np.where(exploration == 1, random_action, action)
+
             # 매도 탐험의 하한선은 보유 비중 전체
             ratio = np.clip(np.where((action == 1) & (exploration == 1), self.portfolio_ratio - diff, ratio), 0, 1)
             ratio = np.where((action == 0) & (exploration == 1), self.portfolio_ratio + diff, ratio)
@@ -99,6 +109,8 @@ class Agent:
         if self.hold_criter > 0.:
             action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
             ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
+
+        ratio = self.set100(self.similar_with_cap(ratio))
 
         # 횟수 갱신
         self.num_buy += np.where(action==self.ACTION_BUY, 1, 0)
@@ -149,8 +161,6 @@ class Agent:
         return self.immediate_reward, delayed_reward
 
     def act(self, ratio):
-
-        # 환경에서 현재 가격 얻기
         curr_price = self.environment.get_price()
 
         # 거래 수량, 금액 결정
