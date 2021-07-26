@@ -137,6 +137,8 @@ class ReinforcementLearner:
 
     def fit(self, delayed_reward, discount_factor, full=False):
         batch_size = len(self.memory_reward) if full else self.batch_size
+        if len(self.memory_sample) == batch_size:
+            batch_size -= 1
         # 배치 학습 데이터 생성 및 신경망 갱신
         if batch_size > 0:
             value_loss, policy_loss = self.update_networks(batch_size, delayed_reward, discount_factor)
@@ -201,7 +203,8 @@ class ReinforcementLearner:
                 # 신경망 또는 탐험에 의한 행동 결정
                 action, ratio, exploration = self.agent.decide_action(pred_policy, epsilon)
                 # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
-                immediate_reward, delayed_reward = self.agent.act(ratio)
+                immediate_reward, delayed_reward = self.agent.get_reward()
+                self.agent.act(ratio)
 
                 # 행동 및 행동에 대한 결과를 기억
                 self.memory_sample.append(next_sample)
@@ -226,7 +229,8 @@ class ReinforcementLearner:
             # 에포크 종료 후 학습
             if learning:
                 self.fit(self.agent.profitloss * tf.abs(self.agent.portfolio_ratio - self.agent.base_portfolio_ratio), discount_factor, full=True)
-
+            print(self.agent.portfolio_ratio)
+            
             # 에포크 관련 정보 로그 기록
             num_epoches_digit = len(str(num_epoches))
             epoch_str = str(epoch + 1).rjust(num_epoches_digit, '0')
@@ -276,13 +280,14 @@ class A2CLearner(ReinforcementLearner):
             self.init_policy_network()
         
     def get_batch(self, batch_size, delayed_reward, discount_factor):
+        # 행동에 대한 보상은 다음날 알 수 있음
         memory = zip(
-            reversed(self.memory_sample[-batch_size:]),
-            reversed(self.memory_action[-batch_size:]),
-            reversed(self.memory_value[-batch_size:]),
-            reversed(self.memory_policy[-batch_size:]),
+            reversed(self.memory_sample[-batch_size-1:-1]),
+            reversed(self.memory_action[-batch_size-1:-1]),
+            reversed(self.memory_value[-batch_size-1:-1]),
+            reversed(self.memory_policy[-batch_size-1:-1]),
             reversed(self.memory_reward[-batch_size:]),
-            reversed(self.memory_cap_policy[-batch_size:])
+            reversed(self.memory_cap_policy[-batch_size-1:-1])
         )
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_features))
         y_value = np.zeros((batch_size, self.num_ticker * self.agent.NUM_ACTIONS))
@@ -291,6 +296,7 @@ class A2CLearner(ReinforcementLearner):
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward, cap_policy) in enumerate(memory):
             x[i] = np.array(sample)
+            # r = ((delayed_reward + reward + 1) * (reward_next - reward + 1) - 1) * 100
             r = (delayed_reward + reward_next - reward * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next * cap_policy
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)

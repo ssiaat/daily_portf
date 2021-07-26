@@ -59,6 +59,7 @@ class Agent:
         self.num_sell = np.zeros((self.num_ticker,))
         self.num_hold = np.zeros((self.num_ticker,))
         self.immediate_reward = 0
+
         self.base_ks = self.environment.get_ks_to_reset()
         self.win_cnt = 0
 
@@ -77,11 +78,6 @@ class Agent:
                 self.portfolio_value_each -= buy_value_each * self.TRADING_TAX[0]
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
-            if self.portfolio_value < 0:
-                print(buy_value_each)
-                print(self.portfolio_value)
-                print(transaction)
-                exit()
 
     def decide_action(self, ratio, epsilon):
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
@@ -124,29 +120,9 @@ class Agent:
 
         return buy_trading_unit, sell_trading_unit
 
-    def act(self, ratio):
-
-        # 환경에서 현재 가격 얻기
-        curr_price = self.environment.get_price()
-
+    def get_reward(self):
         # 즉시 보상 초기화
         self.immediate_reward = 0
-
-        # 거래 수량, 금액 결정
-        buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
-        buy_value_each = buy_unit * curr_price
-        sell_value_each = sell_unit * curr_price
-        self.num_stocks += buy_unit - sell_unit
-
-        # 매도 수수료는 바로 반영, 매수 수수료는 장부가치에 반영
-        buy_value = tf.reduce_sum(buy_value_each)
-        sell_value = tf.reduce_sum(sell_value_each) * (1 - self.TRADING_TAX[1])
-        self.balance = sell_value + self.balance - buy_value
-        if self.balance < 0:
-            print('balance........')
-            exit()
-        # 포트폴리오 가치 갱신, 거래세 반영
-        self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)
 
         # ks200 대비 수익률로 보상 결정
         ks_now = self.environment.get_ks()
@@ -158,6 +134,7 @@ class Agent:
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
         self.immediate_reward = self.profitloss * tf.abs(self.portfolio_ratio - self.base_portfolio_ratio)
+
         # 지연 보상 - 익절, 손절 기준
         delayed_reward = 0
         if self.profitloss > self.delayed_reward_threshold or self.profitloss < -self.delayed_reward_threshold / 2:
@@ -169,8 +146,26 @@ class Agent:
             delayed_reward = self.immediate_reward
         else:
             delayed_reward = np.zeros((self.num_ticker,))
-
         return self.immediate_reward, delayed_reward
+
+    def act(self, ratio):
+
+        # 환경에서 현재 가격 얻기
+        curr_price = self.environment.get_price()
+
+        # 거래 수량, 금액 결정
+        buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
+        buy_value_each = buy_unit * curr_price
+        sell_value_each = sell_unit * curr_price
+        self.num_stocks += buy_unit - sell_unit
+
+        # 매도 수수료는 바로 반영, 매수 수수료는 장부가치에 반영
+        buy_value = tf.reduce_sum(buy_value_each)
+        sell_value = tf.reduce_sum(sell_value_each) * (1 - self.TRADING_TAX[1])
+        self.balance = sell_value + self.balance - buy_value
+
+        # 포트폴리오 가치 갱신, 거래세 반영
+        self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)
 
     def tf2np(self, tensor):
         return tf.make_ndarray(tf.make_tensor_proto(tensor))

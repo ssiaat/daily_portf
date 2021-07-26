@@ -24,7 +24,8 @@ class Network:
         self.initializer = glorot_normal()
         self.activation = 'relu'
         self.activation_last = activation
-        self.optimizer = Adam(lr)
+        lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
+        self.optimizer = Adam(lr_scheduler)
 
     def predict(self, sample):
         with self.lock:
@@ -35,11 +36,6 @@ class Network:
             # 가치 신경망 갱신
             output = self.model(x) + 1e-4
             loss = tf.sqrt(self.loss(y, output))
-            output_t = tf.where(tf.math.is_nan(output)==True, 1, 0)
-            # print(self.model.trainable_variables[0][0])
-            if tf.reduce_sum(output_t) > 0:
-                print('there is nan')
-                exit()
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
         return tf.reduce_mean(loss)
@@ -78,7 +74,8 @@ class DNN(Network):
 
     def get_network(self, inp):
         output = concatenate([m(i) for i,m in zip(inp, self.sub_models)])
+        output = self.residual_layer(output, 2048)
         output = self.residual_layer(output, 1024)
-        output = self.residual_layer(output, 512)
+        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
