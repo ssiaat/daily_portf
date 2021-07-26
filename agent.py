@@ -51,9 +51,9 @@ class Agent:
         self.num_stocks = np.zeros((self.num_ticker,))
         self.portfolio_ratio = np.zeros((self.num_ticker,))
         self.portfolio_value = self.initial_balance
-        self.base_portfolio_value = self.initial_balance
         self.portfolio_value_each = np.zeros((self.num_ticker,))
         self.base_portfolio_ratio = np.zeros((self.num_ticker,))
+        self.base_portfolio_value = self.initial_balance
 
         self.num_buy = np.zeros((self.num_ticker,))
         self.num_sell = np.zeros((self.num_ticker,))
@@ -68,19 +68,24 @@ class Agent:
     def set100(self, tensor):
         return tensor / tf.reduce_sum(tensor)
 
-    def renewal_portfolio_ratio(self, transaction, buy_value=None, sell_value=None):
+    def renewal_portfolio_ratio(self, transaction, buy_value_each=None):
         if tf.reduce_sum(self.num_stocks) > 0:
             curr_price = self.environment.get_price()
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
-                self.portfolio_value_each -= buy_value * self.TRADING_TAX[0] + sell_value * self.TRADING_TAX[1]
+                # 매도 수수료는 balance에 반영
+                self.portfolio_value_each -= buy_value_each * self.TRADING_TAX[0]
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
+            if self.portfolio_value < 0:
+                print(buy_value_each)
+                print(self.portfolio_value)
+                print(transaction)
+                exit()
 
     def decide_action(self, ratio, epsilon):
-
-        # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정
-        diff = ratio - self.portfolio_ratio
+        # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
+        diff = tf.clip_by_value(abs(ratio - self.portfolio_ratio), 0, tf.reduce_mean(ratio) / 2)
         action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
 
         # 탐험 여부 결정
@@ -89,9 +94,10 @@ class Agent:
             exploration = np.random.random((self.num_ticker,)) < epsilon
             random_action = np.random.random((self.num_ticker,)) < 0.5
             action = np.where(exploration == 1, random_action, action)
-            ratio = np.where((action == 1) & (exploration == 1), self.portfolio_ratio - diff, ratio)
-            ratio_ = np.where((action == 0) & (exploration == 1), self.portfolio_ratio + diff, ratio)
-            ratio = self.set100(ratio_)
+            # 매도 탐험의 하한선은 보유 비중 전체
+            ratio = np.clip(np.where((action == 1) & (exploration == 1), self.portfolio_ratio - diff, ratio), 0, 1)
+            ratio = np.where((action == 0) & (exploration == 1), self.portfolio_ratio + diff, ratio)
+            ratio = self.set100(ratio)
 
         # hold 여부 결정
         if self.hold_criter > 0.:
@@ -106,11 +112,15 @@ class Agent:
         return action, ratio, exploration
 
     def decide_trading_unit(self, ratio, curr_price):
-        sell_trading_unit = tf.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * self.portfolio_value_each / np.where(curr_price == 0., 1., curr_price))
+        sell_trading_unit = tf.math.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * \
+                                     self.portfolio_value_each / np.where(curr_price == 0., 1., curr_price))
         # 거래정지 상태인데 거래하는 경우 방지
         sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
         sell_trading_value = curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1])
-        buy_trading_unit = tf.floor(tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10) * (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price==0., 1., curr_price))
+        buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10)
+        # 거래정지 상태인데 거래하는 경우 방지
+        buy_trading_unit = tf.math.floor(self.set100(tf.where(curr_price == 0., 0., buy_trading_ratio)) * \
+                                    (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price==0., 1., curr_price))
 
         return buy_trading_unit, sell_trading_unit
 
@@ -124,13 +134,19 @@ class Agent:
 
         # 거래 수량, 금액 결정
         buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
+        buy_value_each = buy_unit * curr_price
+        sell_value_each = sell_unit * curr_price
         self.num_stocks += buy_unit - sell_unit
-        buy_value = tf.reduce_sum(buy_unit * curr_price) * (1 - self.TRADING_TAX[0])
-        sell_value = tf.reduce_sum(sell_unit * curr_price) * (1 - self.TRADING_TAX[1])
-        self.balance = sell_value + self.balance - buy_value
 
+        # 매도 수수료는 바로 반영, 매수 수수료는 장부가치에 반영
+        buy_value = tf.reduce_sum(buy_value_each)
+        sell_value = tf.reduce_sum(sell_value_each) * (1 - self.TRADING_TAX[1])
+        self.balance = sell_value + self.balance - buy_value
+        if self.balance < 0:
+            print('balance........')
+            exit()
         # 포트폴리오 가치 갱신, 거래세 반영
-        self.renewal_portfolio_ratio(transaction=True, buy_value=buy_value, sell_value=sell_value)
+        self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)
 
         # ks200 대비 수익률로 보상 결정
         ks_now = self.environment.get_ks()

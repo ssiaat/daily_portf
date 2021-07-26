@@ -27,7 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
     parser.add_argument('--balance', type=int, default=1e9)
-    parser.add_argument('--num_epoches', type=int, default=100)
+    parser.add_argument('--num_epoches', type=int, default=10)
     parser.add_argument('--hold_criter', type=float, default=0.)
     parser.add_argument('--delayed_reward_threshold', type=float, default=0.02)
     parser.add_argument('--output_name', default=utils.get_time_str())
