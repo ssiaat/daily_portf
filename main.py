@@ -36,7 +36,6 @@ if __name__ == '__main__':
     parser.add_argument('--reuse_models', action='store_true')
     parser.add_argument('--learning', action='store_true')
     parser.add_argument('--stationary', action='store_true')
-    parser.add_argument('--split_model', action='store_true')
     parser.add_argument('--start_date', default=start_date)
     parser.add_argument('--end_date', default=end_date)
     args = parser.parse_args()
@@ -93,7 +92,7 @@ if __name__ == '__main__':
     # 공통 파라미터 설정
     common_params = {'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
                      'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes), 'hold_criter': args.hold_criter,
-                     'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models, 'split_model': args.split_model,
+                     'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models,
                      'price_data': price_data, 'cap_data': cap_data, 'ks_data' : ks_data, 'training_data': training_data,
                      'value_network_path': value_network_path, 'policy_network_path': policy_network_path}
 

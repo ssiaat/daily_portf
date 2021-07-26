@@ -14,12 +14,11 @@ import tensorflow as tf
 class Network:
     lock = threading.Lock()
 
-    def __init__(self, input_dim=0, output_dim=0, num_ticker=100, trainable=False, split_model=False, lr=0.001, activation=None):
+    def __init__(self, input_dim=0, output_dim=0, num_ticker=100, trainable=False, lr=0.001, activation=None):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.num_ticker = num_ticker
         self.trainable = trainable
-        self.split_model = split_model
         self.loss = mse
         self.model = None
         self.initializer = glorot_normal()
@@ -71,18 +70,15 @@ class DNN(Network):
 
     def mini_dnn(self):
         model = Sequential()
-        model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
+        model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
         model.add(BatchNormalization(trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
         model.add(BatchNormalization(trainable=self.trainable))
         return model
 
     def get_network(self, inp):
-        if self.split_model:
-            output = concatenate([m(i) for i,m in zip(inp, self.sub_models)])
-        else:
-            output = tf.reshape(inp, (-1, self.num_ticker * self.input_dim))
+        output = concatenate([m(i) for i,m in zip(inp, self.sub_models)])
+        output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
-        output = self.residual_layer(output, 256)
         output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(output)
         return Model(inp, output)

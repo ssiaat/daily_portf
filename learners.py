@@ -17,7 +17,7 @@ class ReinforcementLearner:
     __metaclass__ = abc.ABCMeta
     lock = threading.Lock()
 
-    def __init__(self, trainable=False, split_model=False,
+    def __init__(self, trainable=False,
                 price_data=None, cap_data=None, ks_data=None, training_data=None,
                 hold_criter=0., delayed_reward_threshold=.05,
                 num_ticker=100, num_features=7, lr=0.001,
@@ -48,7 +48,6 @@ class ReinforcementLearner:
         self.lr = lr
         self.value_network = value_network
         self.policy_network = policy_network
-        self.split_model = split_model
         self.reuse_models = reuse_models
 
         # 메모리
@@ -79,14 +78,14 @@ class ReinforcementLearner:
     def init_value_network(self, activation='linear'):
         self.value_network = DNN(
             input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
-            num_ticker=self.num_ticker, trainable=self.trainable, split_model=self.split_model,
+            num_ticker=self.num_ticker, trainable=self.trainable,
             lr=self.lr, activation=activation)
         if self.reuse_models and os.path.exists(self.value_network_path):
                 self.value_network.load_model(model_path=self.value_network_path)
 
     def init_policy_network(self, activation='linear'):
         self.policy_network = DNN(input_dim=self.num_features, output_dim=self.num_ticker, num_ticker=self.num_ticker,
-            trainable=self.trainable, split_model=self.split_model, lr=self.lr, activation=activation)
+            trainable=self.trainable, lr=self.lr, activation=activation)
         if self.reuse_models and os.path.exists(self.policy_network_path):
             self.policy_network.load_model(model_path=self.policy_network_path)
 
