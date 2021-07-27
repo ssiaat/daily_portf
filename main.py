@@ -18,6 +18,7 @@ value_name = None
 policy_name = None
 start_date = '20000201'
 end_date = '20151230'
+criterion_date = '20151230'
 
 if __name__ == '__main__':
 
@@ -29,15 +30,13 @@ if __name__ == '__main__':
     parser.add_argument('--balance', type=int, default=1e9)
     parser.add_argument('--num_epoches', type=int, default=10)
     parser.add_argument('--hold_criter', type=float, default=0.)
-    parser.add_argument('--delayed_reward_threshold', type=float, default=0.02)
+    parser.add_argument('--delayed_reward_threshold', type=float, default=0.01)
     parser.add_argument('--output_name', default=utils.get_time_str())
     parser.add_argument('--value_network_name', default=value_name)
     parser.add_argument('--policy_network_name', default=policy_name)
     parser.add_argument('--reuse_models', action='store_true')
     parser.add_argument('--learning', action='store_true')
     parser.add_argument('--stationary', action='store_true')
-    parser.add_argument('--start_date', default=start_date)
-    parser.add_argument('--end_date', default=end_date)
     args = parser.parse_args()
 
     # Keras Backend 설정
@@ -85,9 +84,9 @@ if __name__ == '__main__':
             output_path, '{}_policy.h5'.format(args.output_name))
 
     # 포트폴리오 구성 ticker정하고 데이터 불러옴
-    stock_codes = data_manager.get_stock_codes(args.num_stocks, args.end_date)
+    stock_codes = data_manager.get_stock_codes(args.num_stocks, criterion_date)
     print(f'{len(stock_codes)} stocks in universe')
-    price_data, cap_data, ks_data, training_data = data_manager.make_data(stock_codes, args.start_date, args.end_date, args.stationary)
+    price_data, cap_data, ks_data, training_data = data_manager.make_data(stock_codes, start_date, end_date, args.stationary)
 
     # 공통 파라미터 설정
     common_params = {'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),

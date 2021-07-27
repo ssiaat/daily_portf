@@ -232,6 +232,7 @@ class ReinforcementLearner:
             if learning:
                 self.fit(self.agent.profitloss * tf.abs(self.agent.portfolio_ratio - self.agent.base_portfolio_ratio), discount_factor, full=True)
             print(self.agent.portfolio_ratio)
+            print(self.environment.get_cap())
 
             # 에포크 관련 정보 로그 기록
             num_epoches_digit = len(str(num_epoches))
@@ -298,9 +299,15 @@ class A2CLearner(ReinforcementLearner):
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward, cap_policy) in enumerate(memory):
             x[i] = np.array(sample)
-            # r = ((delayed_reward + reward + 1) * (reward_next - reward + 1) - 1) * 100
-            r = (delayed_reward + reward_next - reward * 2) * 100
-            y_value[i, action] = r + discount_factor * value_max_next * cap_policy
+            r = ((delayed_reward + reward + 1) * (reward_next - reward + 1) - 1) * 100
+            # r = (delayed_reward + reward_next - reward * 2) * 100
+            try:
+                y_value[i, action] = r + discount_factor * value_max_next * cap_policy
+            except:
+                print(r)
+                print(value_max_next)
+                print(cap_policy)
+                exit()
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
             y_policy[i] = self.agent.set100(tf.nn.softmax(advantage) * cap_policy)
             value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)

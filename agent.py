@@ -6,10 +6,14 @@ class Agent:
     # 매매 수수료 및 세금
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
+    # 시총 비중 대비 매수 매도 차이
+    OVER_CAP = [0.005, 0.005]
+
     # 행동
     ACTION_BUY = 0  # 매수
     ACTION_SELL = 1  # 매도
     ACTION_HOLD = 2  # 홀딩
+
     # 인공 신경망에서 확률을 구할 행동들
     ACTIONS = [ACTION_BUY, ACTION_SELL]
     NUM_ACTIONS = len(ACTIONS)  # 인공 신경망에서 고려할 출력값의 개수
@@ -72,8 +76,8 @@ class Agent:
     def similar_with_cap(self, ratio):
         curr_cap = self.environment.get_cap()
         curr_price = self.environment.get_price()
-        ratio = tf.clip_by_value(ratio, curr_cap - 0.02, curr_cap + 0.02)
-        ratio = self.set100(tf.where(curr_price == 0., 0., ratio))
+        curr_cap = self.set100(tf.clip_by_value(curr_price == 0., 0, curr_cap))
+        ratio = self.set100(tf.clip_by_value(ratio, curr_cap - self.OVER_CAP[1], curr_cap + self.OVER_CAP[0]))
         return ratio
 
     def renewal_portfolio_ratio(self, transaction, buy_value_each=None):
@@ -87,8 +91,6 @@ class Agent:
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
     def decide_action(self, ratio, curr_cap, epsilon):
-        curr_price = self.environment.get_price()
-
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
         diff = tf.clip_by_value(abs(ratio - self.portfolio_ratio), 0, tf.reduce_mean(ratio) / 2)
         action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
@@ -110,7 +112,7 @@ class Agent:
             action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
             ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
-        ratio = self.set100(self.similar_with_cap(ratio))
+        ratio = self.similar_with_cap(ratio)
 
         # 횟수 갱신
         self.num_buy += np.where(action==self.ACTION_BUY, 1, 0)
