@@ -76,7 +76,7 @@ class Agent:
     def similar_with_cap(self, ratio):
         curr_cap = self.environment.get_cap()
         curr_price = self.environment.get_price()
-        curr_cap = self.set100(tf.clip_by_value(curr_price == 0., 0, curr_cap))
+        curr_cap = self.set100(tf.where(curr_price == 0., 0., curr_cap))
         ratio = self.set100(tf.clip_by_value(ratio, curr_cap - self.OVER_CAP[1], curr_cap + self.OVER_CAP[0]))
         return ratio
 
