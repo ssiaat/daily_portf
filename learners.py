@@ -172,8 +172,6 @@ class ReinforcementLearner:
 
     def fit(self, delayed_reward, discount_factor, full=False):
         batch_size = len(self.memory_reward) if full else self.batch_size
-        if len(self.memory_sample) == batch_size:
-            batch_size -= 1
         # 배치 학습 데이터 생성 및 신경망 갱신
         if batch_size > 0:
             value_loss, policy_loss = self.update_networks(batch_size, delayed_reward, discount_factor)
@@ -261,6 +259,12 @@ class ReinforcementLearner:
 
                 # 지연 보상 발생된 경우 미니 배치 학습
                 if learning and (tf.reduce_sum(delayed_reward) != 0):
+                    # 첫날에는 포트폴리오 존재하지 않는 것을 고려해서 batch size조정
+                    if self.batch_size == len(self.memory_sample):
+                        if self.batch_size == 2:
+                            self.batch_size = 0
+                            continue
+                        self.batch_size -= 2
                     self.fit(delayed_reward, discount_factor)
 
             # 에포크 종료 후 학습
@@ -332,7 +336,7 @@ class A2CLearner(ReinforcementLearner):
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward, cap_ratio) in enumerate(memory):
             x[i] = np.array(sample)
-            r = (delayed_reward / 2 + reward_next - reward) * 100
+            r = (delayed_reward + (reward_next - reward) * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next * cap_ratio
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
             y_policy[i] = self.agent.set100(tf.nn.softmax(advantage * cap_ratio))

@@ -135,9 +135,6 @@ class Agent:
         return buy_trading_unit, sell_trading_unit
 
     def get_reward(self):
-        # 즉시 보상 초기화
-        self.immediate_reward = 0
-
         # ks200 대비 수익률로 보상 결정
         ks_now = self.environment.get_ks()
         ks_ret = (ks_now - self.base_ks) / self.base_ks
@@ -159,7 +156,7 @@ class Agent:
             self.base_ks = ks_now
             delayed_reward = self.immediate_reward
         else:
-            delayed_reward = np.zeros((self.num_ticker,))
+            delayed_reward = np.zeros((self.num_ticker,), dtype='float')
         return self.immediate_reward, delayed_reward
 
     def act(self, ratio):
