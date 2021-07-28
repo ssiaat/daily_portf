@@ -6,19 +6,21 @@ import json
 
 import settings
 import utils
-import data_manager
+from data_manager import *
 import warnings
 
 warnings.filterwarnings('ignore')
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-num_stocks = 20
+num_stocks = 200
 value_name = None
 policy_name = None
-start_date = '20000201'
-end_date = '20151230'
-criterion_date = '20151230'
+start_date = 20000201
+# 학습이 이뤄지는 마지막 시점
+criterion_year = 2015
+# test가 이뤄지는 마지막 시점
+end_year = 2015
 
 if __name__ == '__main__':
 
@@ -28,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
     parser.add_argument('--balance', type=int, default=1e9)
-    parser.add_argument('--num_epoches', type=int, default=10)
+    parser.add_argument('--num_epoches', type=int, default=30)
     parser.add_argument('--hold_criter', type=float, default=0.)
     parser.add_argument('--delayed_reward_threshold', type=float, default=0.01)
     parser.add_argument('--output_name', default=utils.get_time_str())
@@ -38,6 +40,11 @@ if __name__ == '__main__':
     parser.add_argument('--learning', action='store_true')
     parser.add_argument('--stationary', action='store_true')
     args = parser.parse_args()
+
+    # learning이면 연도별로 종목 리밸런싱 불필요
+    # =>criterion과 end를 둔 이유는 사이 기간에 연도별 리밸런싱을 하기 위함
+    if args.learning:
+        end_year = criterion_year
 
     # Keras Backend 설정
     os.environ['KERAS_BACKEND'] = 'tensorflow'
@@ -63,6 +70,7 @@ if __name__ == '__main__':
         print('This running is for training')
     else:
         print('This running is for testing')
+        args.num_epoches = 1
 
     # 로그, Keras Backend 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
     from learners import A2CLearner
@@ -84,14 +92,18 @@ if __name__ == '__main__':
             output_path, '{}_policy.h5'.format(args.output_name))
 
     # 포트폴리오 구성 ticker정하고 데이터 불러옴
-    stock_codes = data_manager.get_stock_codes(args.num_stocks, criterion_date)
-    print(f'{len(stock_codes)} stocks in universe')
-    price_data, cap_data, ks_data, training_data = data_manager.make_data(stock_codes, start_date, end_date, args.stationary)
+    # 리밸런싱이 있는 기간에 리밸런싱을 할 날짜 계산
+    rebalance_date = set_rebalance_date(criterion_year, end_year)
+
+    # 리밸런싱 날짜마다 종목구하고 전체 종목 universe 계산
+    stock_codes_yearly, stock_codes = get_stock_codes(args.num_stocks, rebalance_date)
+    print(f'yearly: {args.num_stocks} total: {len(stock_codes)} stocks in universe')
+    price_data, cap_data, ks_data, training_data = make_data(stock_codes, start_date, rebalance_date[-1], args.stationary)
 
     # 공통 파라미터 설정
-    common_params = {'trainable': args.learning, 'num_features': int(len(training_data.columns) / len(stock_codes)),
-                     'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': len(stock_codes), 'hold_criter': args.hold_criter,
-                     'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models,
+    common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns),
+                     'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': args.num_stocks, 'hold_criter': args.hold_criter,
+                     'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models, 'trainable': args.learning,
                      'price_data': price_data, 'cap_data': cap_data, 'ks_data' : ks_data, 'training_data': training_data,
                      'value_network_path': value_network_path, 'policy_network_path': policy_network_path}
 

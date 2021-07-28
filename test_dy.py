@@ -1,6 +1,6 @@
-import data_manager
+# import data_manager
 # import matplotlib.pyplot as plt
-# import numpy as np
+import numpy as np
 # from statsmodels.tsa.stattools import adfuller
 import pandas as pd
 
@@ -18,15 +18,4 @@ import pandas as pd
 # plt.plot(df)
 # print(list(df.index).index(pd.Timestamp('20210630')))
 # from datetime import datetime
-a = pd.Timestamp('20151230')
-b = pd.Timestamp('20201230')
-n = 200
-c = data_manager.capital
-a_s = c.loc[a].sort_values(ascending=False).index[:n]
-b_s = c.loc[b].sort_values(ascending=False).index[:n]
-diff = list(set(a_s) - set(b_s))
-print(len(diff))
-# print(len(c[diff].loc[a].dropna()))
-d = c.loc[b].rank(ascending=False)[diff]
-print(len(d) - len(d.dropna()))
-print(len(d[d>300]))
+print(pd.__version__)

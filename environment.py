@@ -12,11 +12,11 @@ class Environment:
     def reset(self):
         self.idx = -1
 
-    def observe(self):
+    def observe(self, stock_codes):
         if len(self.price_data) > self.idx + 1:
             self.idx += 1
-            self.observe_price = self.price_data.iloc[self.idx]
-            self.observe_cap = self.cap_data.iloc[self.idx]
+            self.observe_price = self.price_data.iloc[self.idx][stock_codes]
+            self.observe_cap = self.cap_data.iloc[self.idx][stock_codes]
             self.observe_ks = self.ks_data.iloc[self.idx]
             return self.observe_price
         return None
@@ -38,3 +38,6 @@ class Environment:
 
     def get_ks_to_reset(self):
         return self.ks_data.iloc[0].values[0]
+
+    def get_date(self):
+        return self.ks_data.index[self.idx]

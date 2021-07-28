@@ -29,7 +29,8 @@ class Network:
 
     def predict(self, sample):
         with self.lock:
-            return tf.squeeze(self.model(sample))
+            temp = self.model(sample)
+            return tf.squeeze(temp)
 
     def learn(self, x, y):
         with tf.GradientTape() as tape:

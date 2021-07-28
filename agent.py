@@ -7,7 +7,7 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = [0.005, 0.005]
+    OVER_CAP = [0.001, 0.001]
 
     # 행동
     ACTION_BUY = 0  # 매수
@@ -164,6 +164,7 @@ class Agent:
 
     def act(self, ratio):
         curr_price = self.environment.get_price()
+        ratio = self.similar_with_cap(ratio)
 
         # 거래 수량, 금액 결정
         buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
