@@ -102,7 +102,7 @@ class Agent:
             random_action = np.random.random((self.num_ticker,)) < 0.5
             action = np.where(exploration == 1, random_action, action)
 
-            # 매도 탐험의 하한선은 보유 비중 전체
+            # 매도 탐험의 하한선은 보유 비중 전체, 1은 명목상 존재
             ratio = np.clip(np.where((action == 1) & (exploration == 1), self.portfolio_ratio - diff, ratio), 0, 1)
             ratio = np.where((action == 0) & (exploration == 1), self.portfolio_ratio + diff, ratio)
             ratio = self.set100(ratio)

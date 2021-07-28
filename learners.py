@@ -160,13 +160,9 @@ class ReinforcementLearner:
     def update_networks(self, batch_size, delayed_reward, discount_factor):
         # 배치 학습 데이터 생성
         x, y_value, y_policy = self.get_batch(batch_size, delayed_reward, discount_factor)
-        print(y_policy)
         if len(x) > 0:
             value_loss = self.value_network.learn(x, y_value)
             policy_loss = self.policy_network.learn(x, y_policy)
-            print(value_loss)
-            print(policy_loss)
-            print()
             return value_loss, policy_loss
         return None
 
