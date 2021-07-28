@@ -37,7 +37,7 @@ class Network:
         with tf.GradientTape() as tape:
             # 가치 신경망 갱신
             output = self.model(x)
-            loss = tf.sqrt(tf.clip_by_value(self.loss(y, output), 1e-10, 1e10))
+            loss = tf.sqrt(tf.clip_by_value(self.loss(y, output), 1e-5, 1e10))
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
         return tf.reduce_mean(loss)
@@ -110,7 +110,7 @@ class AttentionLSTM(Network):
     def get_attention_score(self, hidden_states):
         last_hidden_state = hidden_states[-1]
         attention_score = tf.exp(last_hidden_state * hidden_states)
-        attention_score = attention_score / tf.reduce_sum(attention_score)
+        attention_score = attention_score / tf.clip_by_value(tf.reduce_sum(attention_score), 1e-10, 1e10)
         context_vector = tf.reduce_sum(attention_score * hidden_states, axis=1)
         return context_vector
 

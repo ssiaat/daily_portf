@@ -160,9 +160,13 @@ class ReinforcementLearner:
     def update_networks(self, batch_size, delayed_reward, discount_factor):
         # 배치 학습 데이터 생성
         x, y_value, y_policy = self.get_batch(batch_size, delayed_reward, discount_factor)
+        print(y_policy)
         if len(x) > 0:
             value_loss = self.value_network.learn(x, y_value)
             policy_loss = self.policy_network.learn(x, y_policy)
+            print(value_loss)
+            print(policy_loss)
+            print()
             return value_loss, policy_loss
         return None
 
@@ -318,7 +322,7 @@ class A2CLearner(ReinforcementLearner):
             reversed(self.memory_action[-batch_size-1:-1]),
             reversed(self.memory_value[-batch_size-1:-1]),
             reversed(self.memory_policy[-batch_size-1:-1]),
-            reversed(self.memory_reward[-batch_size:]),
+            reversed(self.memory_reward[-batch_size-1:-1]),
             reversed(self.memory_cap_policy[-batch_size-1:-1])
         )
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
@@ -326,13 +330,12 @@ class A2CLearner(ReinforcementLearner):
         y_policy = np.zeros((batch_size, self.num_ticker))
         value_max_next = np.zeros((self.num_ticker,))
         reward_next = self.memory_reward[-1]
-        for i, (sample, action, value, policy, reward, cap_policy) in enumerate(memory):
+        for i, (sample, action, value, policy, reward, cap_ratio) in enumerate(memory):
             x[i] = np.array(sample)
-            r = ((delayed_reward + reward + 1) * (reward_next - reward + 1) - 1) * 100
-            # r = (delayed_reward + reward_next - reward * 2) * 100
-            y_value[i, action] = r + discount_factor * value_max_next * cap_policy
+            r = (delayed_reward / 2 + reward_next - reward) * 100
+            y_value[i, action] = r + discount_factor * value_max_next * cap_ratio
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
-            y_policy[i] = self.agent.set100(tf.nn.softmax(advantage) * cap_policy)
+            y_policy[i] = self.agent.set100(tf.nn.softmax(advantage * cap_ratio))
             value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
             reward_next = reward
 
