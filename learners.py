@@ -319,13 +319,7 @@ class A2CLearner(ReinforcementLearner):
             x[i] = np.array(sample)
             r = ((delayed_reward + reward + 1) * (reward_next - reward + 1) - 1) * 100
             # r = (delayed_reward + reward_next - reward * 2) * 100
-            try:
-                y_value[i, action] = r + discount_factor * value_max_next * cap_policy
-            except:
-                print(r)
-                print(value_max_next)
-                print(cap_policy)
-                exit()
+            y_value[i, action] = r + discount_factor * value_max_next * cap_policy
             advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
             y_policy[i] = self.agent.set100(tf.nn.softmax(advantage) * cap_policy)
             value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
