@@ -32,7 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('--balance', type=int, default=1e9)
     parser.add_argument('--num_epoches', type=int, default=30)
     parser.add_argument('--hold_criter', type=float, default=0.)
-    parser.add_argument('--delayed_reward_threshold', type=float, default=0.01)
+    parser.add_argument('--delayed_reward_threshold', type=float, default=0.02)
     parser.add_argument('--output_name', default=utils.get_time_str())
     parser.add_argument('--value_network_name', default=value_name)
     parser.add_argument('--policy_network_name', default=policy_name)
@@ -40,11 +40,6 @@ if __name__ == '__main__':
     parser.add_argument('--learning', action='store_true')
     parser.add_argument('--stationary', action='store_true')
     args = parser.parse_args()
-
-    # learning이면 연도별로 종목 리밸런싱 불필요
-    # =>criterion과 end를 둔 이유는 사이 기간에 연도별 리밸런싱을 하기 위함
-    if args.learning:
-        end_year = criterion_year
 
     # Keras Backend 설정
     os.environ['KERAS_BACKEND'] = 'tensorflow'
@@ -66,8 +61,11 @@ if __name__ == '__main__':
     stream_handler.setLevel(logging.INFO)
     logging.basicConfig(format="%(message)s", handlers=[file_handler, stream_handler], level=logging.DEBUG)
 
+    # learning이면 연도별로 종목 리밸런싱 불필요
+    # =>criterion과 end를 둔 이유는 사이 기간에 연도별 리밸런싱을 하기 위함
     if args.learning == True:
         print('This running is for training')
+        end_year = criterion_year
     else:
         print('This running is for testing')
         args.num_epoches = 1

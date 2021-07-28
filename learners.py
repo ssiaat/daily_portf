@@ -268,8 +268,7 @@ class ReinforcementLearner:
                     self.learning_cnt, self.value_loss, self.policy_loss, elapsed_time_epoch))
 
             # 학습 관련 정보 갱신
-            max_portfolio_value = max(
-                max_portfolio_value, self.agent.portfolio_value)
+            max_portfolio_value = max(max_portfolio_value, self.agent.portfolio_value)
             if self.agent.portfolio_value > self.agent.initial_balance:
                 epoch_win_cnt += 1
 

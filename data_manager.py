@@ -81,7 +81,7 @@ def make_data(stock_codes, start_date, end_date, stationary):
     start_date = pd.Timestamp(str(start_date))
     start_idx = list(ks200.index).index(start_date)
     if stationary:
-        start_idx -= len(w) - 1
+        start_idx += len(w) - 1
     end_idx = list(ks200.index).index(end_date)
     date_idx = list(ks200.index)[start_idx:end_idx+1]
 
@@ -97,7 +97,6 @@ def make_data(stock_codes, start_date, end_date, stationary):
         training_data_list.append(training_data)
         price_df = pd.concat([price_df, price_data], axis=1)
         cap_df = pd.concat([cap_df, cap_data], axis=1)
-
     cap_df = (cap_df.T / cap_df.sum(axis=1)).T
     # training_df 는 3차원으로 설정
     # date -> stock code -> data
