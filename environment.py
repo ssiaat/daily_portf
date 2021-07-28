@@ -13,7 +13,7 @@ class Environment:
         self.idx = -1
 
     def observe(self, stock_codes):
-        if len(self.price_data) > self.idx + 1:
+        if len(self.price_data) > self.idx:
             self.idx += 1
             self.observe_price = self.price_data.iloc[self.idx][stock_codes]
             self.observe_cap = self.cap_data.iloc[self.idx][stock_codes]
@@ -23,12 +23,12 @@ class Environment:
 
     def get_price(self):
         if self.observe_price is not None:
-            return self.observe_price.values
+            return self.observe_price.values.reshape(-1,)
         return None
 
     def get_cap(self):
         if self.observe_cap is not None:
-            return self.observe_cap.values
+            return self.observe_cap.values.reshape(-1,)
         return None
 
     def get_ks(self):

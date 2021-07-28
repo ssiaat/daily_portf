@@ -13,12 +13,13 @@ warnings.filterwarnings('ignore')
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-num_stocks = 200
+num_stocks = 10
+num_steps = 5
 value_name = None
 policy_name = None
 start_date = 20000201
 # 학습이 이뤄지는 마지막 시점
-criterion_year = 2015
+criterion_year = 2005
 # test가 이뤄지는 마지막 시점
 end_year = 2015
 
@@ -27,6 +28,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_stocks', type=int, default=num_stocks)
     parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--net', choices=['dnn', 'lstm'], default='lstm')
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
     parser.add_argument('--balance', type=int, default=1e9)
@@ -70,6 +72,9 @@ if __name__ == '__main__':
         print('This running is for testing')
         args.num_epoches = 1
 
+    if args.net == 'dnn':
+        num_steps = 1
+
     # 로그, Keras Backend 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
     from learners import A2CLearner
 
@@ -99,11 +104,11 @@ if __name__ == '__main__':
     price_data, cap_data, ks_data, training_data = make_data(stock_codes, start_date, rebalance_date[-1], args.stationary)
 
     # 공통 파라미터 설정
-    common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns),
+    common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'net':args.net,
                      'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': args.num_stocks, 'hold_criter': args.hold_criter,
-                     'lr': args.lr, 'output_path': output_path, 'reuse_models': args.reuse_models, 'trainable': args.learning,
+                     'num_steps':num_steps, 'lr': args.lr,  'reuse_models': args.reuse_models, 'trainable': args.learning,
                      'price_data': price_data, 'cap_data': cap_data, 'ks_data' : ks_data, 'training_data': training_data,
-                     'value_network_path': value_network_path, 'policy_network_path': policy_network_path}
+                     'output_path': output_path, 'value_network_path': value_network_path, 'policy_network_path': policy_network_path}
 
     learner = A2CLearner(**{**common_params})
     if learner is not None:

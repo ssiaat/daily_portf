@@ -1,15 +1,14 @@
 import os
 import logging
 import abc
-
+import collections
 import threading
 import time
 import numpy as np
-import pandas as pd
 
 from environment import Environment
 from agent import Agent
-from networks import DNN
+from networks import DNN, AttentionLSTM
 
 import tensorflow as tf
 
@@ -17,8 +16,8 @@ class ReinforcementLearner:
     __metaclass__ = abc.ABCMeta
     lock = threading.Lock()
 
-    def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=False,
-                price_data=None, cap_data=None, ks_data=None, training_data=None,
+    def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=False, net='dnn',
+                price_data=None, cap_data=None, ks_data=None, training_data=None, num_steps=5,
                 hold_criter=0., delayed_reward_threshold=.05, num_ticker=100, num_features=7, lr=0.001,
                 value_network=None, policy_network=None, value_network_path=None, policy_network_path=None,
                 output_path='', reuse_models=True):
@@ -32,15 +31,18 @@ class ReinforcementLearner:
         # 학습여부 설정
         self.trainable = trainable
         # 환경 설정
-        self.price_data = price_data
         self.environment = Environment(price_data, cap_data, ks_data)
+        self.net = net
+        # 추가 데이터 설정
+        self.price_data = price_data
         self.ks_ret = ((ks_data.iloc[-1] - ks_data.iloc[0]) / ks_data.iloc[0]).values[0]
 
         # 에이전트 설정
         self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter, delayed_reward_threshold=delayed_reward_threshold)
+
         # 학습 데이터
         self.training_data = training_data
-        self.total_len = len(training_data.index)  # 전체 학습 기간의 날짜 수
+        self.total_len = len(training_data.index) / num_ticker  # 전체 학습 기간의 날짜 수
         self.sample = None
         self.date_list = price_data.index  # 3차원 데이터를 date로 접근해야해서 필요
         self.year = self.date_list[0].year  # test환경에서 year값이 변하면 종목을 변경해줘야함
@@ -48,6 +50,7 @@ class ReinforcementLearner:
 
         self.num_ticker = num_ticker
         self.num_features = num_features
+        self.num_steps = num_steps
         
         # 신경망 설정
         self.lr = lr
@@ -83,16 +86,23 @@ class ReinforcementLearner:
         self.modify_action_idx = np.array([i*2 for i in range(self.num_ticker)])
 
     def init_value_network(self, activation='linear'):
-        self.value_network = DNN(
-            input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
-            num_ticker=self.num_ticker, trainable=self.trainable,
-            lr=self.lr, activation=activation)
+        if self.net == 'dnn':
+            self.value_network = DNN(input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
+                                num_ticker=self.num_ticker, num_steps=self.num_steps, trainable=self.trainable, lr=self.lr,
+                                activation=activation)
+        elif self.net == 'lstm':
+            self.value_network = AttentionLSTM(input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS, num_ticker=self.num_ticker,
+                                               num_steps=self.num_steps, trainable=self.trainable, lr=self.lr, activation=activation)
         if self.reuse_models and os.path.exists(self.value_network_path):
                 self.value_network.load_model(model_path=self.value_network_path)
 
     def init_policy_network(self, activation='linear'):
-        self.policy_network = DNN(input_dim=self.num_features, output_dim=self.num_ticker, num_ticker=self.num_ticker,
-            trainable=self.trainable, lr=self.lr, activation=activation)
+        if self.net == 'dnn':
+            self.policy_network = DNN(input_dim=self.num_features, output_dim=self.num_ticker, num_ticker=self.num_ticker,
+                                      num_steps=self.num_steps, trainable=self.trainable, lr=self.lr, activation=activation)
+        elif self.net == 'lstm':
+            self.policy_network = AttentionLSTM(input_dim=self.num_features, output_dim=1, num_ticker=self.num_ticker,
+                                             num_steps=self.num_steps, trainable=self.trainable, lr=self.lr, activation=activation)
         if self.reuse_models and os.path.exists(self.policy_network_path):
             self.policy_network.load_model(model_path=self.policy_network_path)
 
@@ -129,10 +139,12 @@ class ReinforcementLearner:
 
     def build_sample(self, learning):
         self.environment.observe(self.stock_codes_yearly[self.stock_codes_idx])
-        if int(len(self.training_data) / len(self.stock_codes)) > self.training_data_idx + 1:
+        if int(len(self.training_data) / len(self.stock_codes)) > self.training_data_idx + self.num_steps:
             self.training_data_idx += 1
-            self.sample = self.training_data.loc[self.date_list[self.training_data_idx]].loc[self.stock_codes_yearly[self.stock_codes_idx]]
-            self.sample = self.sample.values.reshape((-1,7))
+            date_idx = self.date_list[self.training_data_idx:self.training_data_idx+self.num_steps]
+            self.sample = self.training_data.loc[date_idx].reset_index().drop('key_0', axis=1).set_index('level_1')
+            self.sample = self.sample.loc[self.stock_codes_yearly[self.stock_codes_idx]].values
+            self.sample = self.sample.reshape(self.num_ticker, self.num_steps, self.num_features)
 
             # year check
             if not learning and self.date_list[self.training_data_idx].year != self.year:
@@ -309,7 +321,7 @@ class A2CLearner(ReinforcementLearner):
             reversed(self.memory_reward[-batch_size:]),
             reversed(self.memory_cap_policy[-batch_size-1:-1])
         )
-        x = np.zeros((batch_size, self.num_ticker, 1, self.num_features))
+        x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
         y_value = np.zeros((batch_size, self.num_ticker * self.agent.NUM_ACTIONS))
         y_policy = np.zeros((batch_size, self.num_ticker))
         value_max_next = np.zeros((self.num_ticker,))
