@@ -13,13 +13,13 @@ warnings.filterwarnings('ignore')
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-num_stocks = 10
+num_stocks = 200
 num_steps = 10
 value_name = None
 policy_name = None
 start_date = 20000201
 # 학습이 이뤄지는 마지막 시점
-criterion_year = 2005
+criterion_year = 2015
 # test가 이뤄지는 마지막 시점
 end_year = 2015
 
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_stocks', type=int, default=num_stocks)
     parser.add_argument('--lr', type=float, default=0.001)
-    parser.add_argument('--net', choices=['dnn', 'lstm'], default='lstm')
+    parser.add_argument('--net', choices=['dnn', 'lstm'], default='dnn')
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
     parser.add_argument('--balance', type=int, default=1e9)

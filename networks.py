@@ -38,10 +38,6 @@ class Network:
             # 가치 신경망 갱신
             output = self.model(x)
             loss = tf.sqrt(self.loss(y, output))
-            if flag and tf.math.is_nan(tf.reduce_mean(loss)):
-                print(output)
-                print(y)
-                exit()
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
         return tf.reduce_mean(loss)
