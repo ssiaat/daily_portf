@@ -27,17 +27,21 @@ class Network:
         self.activation = 'relu'
         self.activation_last = activation
         lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer = Adam(lr_scheduler)
+        self.optimizer = Adam(lr_scheduler, clipnorm=.01)
 
     def predict(self, sample):
         with self.lock:
             return tf.squeeze(self.model(sample))
 
-    def learn(self, x, y):
+    def learn(self, x, y, flag=True):
         with tf.GradientTape() as tape:
             # 가치 신경망 갱신
             output = self.model(x)
             loss = tf.sqrt(self.loss(y, output))
+            if flag and tf.math.is_nan(tf.reduce_mean(loss)):
+                print(output)
+                print(y)
+                exit()
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
         return tf.reduce_mean(loss)
@@ -104,13 +108,17 @@ class AttentionLSTM(Network):
         model = Sequential()
         model.add(LSTM(self.hidden_size_lstm, dropout=0.1, return_sequences=True, stateful=False, kernel_initializer=self.initializer))
         model.add(LayerNormalization(trainable=self.trainable))
+        model.add(LSTM(self.hidden_size_lstm * 2, dropout=0.1, return_sequences=True, stateful=False, kernel_initializer=self.initializer))
+        model.add(LayerNormalization(trainable=self.trainable))
+        model.add(LSTM(self.hidden_size_lstm, dropout=0.1, return_sequences=True, stateful=False, kernel_initializer=self.initializer))
+        model.add(LayerNormalization(trainable=self.trainable))
         return model
 
     # calculate attention score from hidden states of each stocks
     def get_attention_score(self, hidden_states):
         last_hidden_state = hidden_states[-1]
         attention_score = tf.exp(last_hidden_state * hidden_states)
-        attention_score = attention_score / tf.clip_by_value(tf.reduce_sum(attention_score), 1e-10, 1e10)
+        attention_score = attention_score / tf.reduce_sum(attention_score)
         context_vector = tf.reduce_sum(attention_score * hidden_states, axis=1)
         return context_vector
 
@@ -127,6 +135,7 @@ class AttentionLSTM(Network):
             h = m(self.shared_dnn(i))
             context_vectors.append(tf.convert_to_tensor([self.get_attention_score(h)]))
         h = Concatenate(axis=1)(context_vectors)
+
         # attention model
         qkv = [am(h) for am in self.qkv_models]
 

@@ -162,12 +162,12 @@ class ReinforcementLearner:
         x, y_value, y_policy = self.get_batch(batch_size, delayed_reward, discount_factor)
         if len(x) > 0:
             value_loss = self.value_network.learn(x, y_value)
-            policy_loss = self.policy_network.learn(x, y_policy)
+            policy_loss = self.policy_network.learn(x, y_policy, True)
             return value_loss, policy_loss
         return None
 
     def fit(self, delayed_reward, discount_factor, full=False):
-        batch_size = len(self.memory_reward) if full else self.batch_size
+        batch_size = len(self.memory_reward) - 2 if full else self.batch_size
         # 배치 학습 데이터 생성 및 신경망 갱신
         if batch_size > 0:
             value_loss, policy_loss = self.update_networks(batch_size, delayed_reward, discount_factor)
@@ -176,7 +176,8 @@ class ReinforcementLearner:
             self.learning_cnt += 1
             self.memory_learning_idx.append(self.training_data_idx)
             self.batch_size = 0
-
+            return policy_loss
+        return 0
     def run(self, num_epoches=100, balance=10000000, discount_factor=0.9, start_epsilon=0.5, learning=True):
         info = "RL:a2c LR:{lr} " \
             "DF:{discount_factor} DRT:{delayed_reward_threshold}".format(
@@ -261,7 +262,8 @@ class ReinforcementLearner:
                             self.batch_size = 0
                             continue
                         self.batch_size -= 2
-                    self.fit(delayed_reward, discount_factor)
+                    l = self.fit(delayed_reward, discount_factor)
+                    print(self.agent.portfolio_value, l)
 
             # 에포크 종료 후 학습
             if learning:
@@ -326,16 +328,16 @@ class A2CLearner(ReinforcementLearner):
             reversed(self.memory_cap_policy[-batch_size-1:-1])
         )
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
-        y_value = np.zeros((batch_size, self.num_ticker * self.agent.NUM_ACTIONS))
-        y_policy = np.zeros((batch_size, self.num_ticker))
+        y_value = np.zeros((batch_size, self.num_ticker * self.agent.NUM_ACTIONS), dtype=np.float32)
+        y_policy = np.zeros((batch_size, self.num_ticker), dtype=np.float32)
         value_max_next = np.zeros((self.num_ticker,))
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward, cap_ratio) in enumerate(memory):
             x[i] = np.array(sample)
             r = (delayed_reward + (reward_next - reward) * 2) * 100
-            y_value[i, action] = r + discount_factor * value_max_next * cap_ratio
-            advantage = tf.gather(value, action) - tf.reduce_mean(tf.reshape(value, (-1, 2)), axis=1)
-            y_policy[i] = self.agent.set100(tf.nn.softmax(advantage * cap_ratio))
+            y_value[i, action] = r + discount_factor * value_max_next
+            advantage = tf.nn.softmax(tf.gather(y_value[i], action) - tf.gather(value, action))
+            y_policy[i] = self.agent.set100(tf.where(cap_ratio == 0., 0., advantage))
             value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
             reward_next = reward
 
