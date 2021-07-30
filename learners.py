@@ -159,7 +159,7 @@ class ReinforcementLearner:
                 self.year = self.date_list[self.training_data_idx].year
                 self.stock_codes_idx += 1
             return self.sample, self.sample_index
-        return None
+        return None, None
 
     @abc.abstractmethod
     def get_batch(self, batch_size, delayed_reward, discount_factor):
@@ -172,7 +172,7 @@ class ReinforcementLearner:
             value_loss = self.value_network.learn(x, y_value)
             policy_loss = self.policy_network.learn(x, y_policy, True)
             return value_loss, policy_loss
-        return None
+        return None, None
 
     def fit(self, delayed_reward, discount_factor, full=False):
         batch_size = len(self.memory_reward) - 2 if full else self.batch_size
