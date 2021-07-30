@@ -1,10 +1,11 @@
 import os
 import logging
 import abc
-import collections
+
 import threading
 import time
 import numpy as np
+import pandas as pd
 
 from environment import Environment
 from agent import Agent
@@ -17,8 +18,8 @@ class ReinforcementLearner:
     lock = threading.Lock()
 
     def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=False, net='dnn',
-                price_data=None, cap_data=None, ks_data=None, training_data=None, num_steps=5,
-                hold_criter=0., delayed_reward_threshold=.05, num_ticker=100, num_features=7, lr=0.001,
+                price_data=None, cap_data=None, index_data=None, index_ppc=None, training_data=None, num_steps=5,
+                hold_criter=0., delayed_reward_threshold=.05, num_ticker=100, num_features=7, num_index=5, lr=0.001,
                 value_network=None, policy_network=None, value_network_path=None, policy_network_path=None,
                 output_path='', reuse_models=True):
         # 인자 확인
@@ -31,11 +32,13 @@ class ReinforcementLearner:
         # 학습여부 설정
         self.trainable = trainable
         # 환경 설정
-        self.environment = Environment(price_data, cap_data, ks_data)
+        self.environment = Environment(price_data, cap_data, index_data)
         self.net = net
         # 추가 데이터 설정
         self.price_data = price_data
-        self.ks_ret = ((ks_data.iloc[-1] - ks_data.iloc[0]) / ks_data.iloc[0]).values[0]
+        self.index_data = index_data
+        self.index_ppc = index_ppc
+        self.ks_ret = ((index_data.ks200.iloc[-1] - index_data.ks200.iloc[0]) / index_data.ks200.iloc[0])
 
         # 에이전트 설정
         self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter, delayed_reward_threshold=delayed_reward_threshold)
@@ -50,6 +53,7 @@ class ReinforcementLearner:
 
         self.num_ticker = num_ticker
         self.num_features = num_features
+        self.num_index = num_index
         self.num_steps = num_steps
         
         # 신경망 설정
@@ -64,7 +68,7 @@ class ReinforcementLearner:
         self.memory_reward = []
         self.memory_value = []
         self.memory_policy = []
-        self.memory_cap_policy = []
+        self.memory_cap_ratio = []
         self.memory_pv = []
         self.memory_pr = []
         self.memory_num_stocks = []
@@ -88,21 +92,24 @@ class ReinforcementLearner:
     def init_value_network(self, activation='linear'):
         if self.net == 'dnn':
             self.value_network = DNN(input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
-                                num_ticker=self.num_ticker, num_steps=self.num_steps, trainable=self.trainable, lr=self.lr,
-                                activation=activation)
+                                num_ticker=self.num_ticker, num_index=self.num_index, num_steps=self.num_steps, trainable=self.trainable,
+                                lr=self.lr, activation=activation)
         elif self.net == 'lstm':
             self.value_network = AttentionLSTM(input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS, num_ticker=self.num_ticker,
-                                               num_steps=self.num_steps, trainable=self.trainable, lr=self.lr, activation=activation)
+                                               num_steps=self.num_steps, num_index=self.num_index, trainable=self.trainable, lr=self.lr,
+                                               activation=activation)
         if self.reuse_models and os.path.exists(self.value_network_path):
                 self.value_network.load_model(model_path=self.value_network_path)
 
     def init_policy_network(self, activation='linear'):
         if self.net == 'dnn':
             self.policy_network = DNN(input_dim=self.num_features, output_dim=self.num_ticker, num_ticker=self.num_ticker,
-                                      num_steps=self.num_steps, trainable=self.trainable, lr=self.lr, activation=activation)
+                                      num_steps=self.num_steps, num_index=self.num_index, trainable=self.trainable, lr=self.lr,
+                                      activation=activation)
         elif self.net == 'lstm':
             self.policy_network = AttentionLSTM(input_dim=self.num_features, output_dim=1, num_ticker=self.num_ticker,
-                                             num_steps=self.num_steps, trainable=self.trainable, lr=self.lr, activation=activation)
+                                             num_steps=self.num_steps, num_index=self.num_index, trainable=self.trainable,
+                                            lr=self.lr, activation=activation)
         if self.reuse_models and os.path.exists(self.policy_network_path):
             self.policy_network.load_model(model_path=self.policy_network_path)
 
@@ -124,7 +131,7 @@ class ReinforcementLearner:
         self.memory_reward = []
         self.memory_value = []
         self.memory_policy = []
-        self.memory_cap_policy = []
+        self.memory_cap_ratio = []
         self.memory_pv = []
         self.memory_pr = []
         self.memory_num_stocks = []
@@ -145,12 +152,13 @@ class ReinforcementLearner:
             self.sample = self.training_data.loc[date_idx].reset_index().drop('key_0', axis=1).set_index('level_1')
             self.sample = self.sample.loc[self.stock_codes_yearly[self.stock_codes_idx]].values
             self.sample = self.sample.reshape(self.num_ticker, self.num_steps, self.num_features)
+            self.sample_index = self.index_ppc.loc[date_idx].values
 
             # year check
             if not learning and self.date_list[self.training_data_idx].year != self.year:
                 self.year = self.date_list[self.training_data_idx].year
                 self.stock_codes_idx += 1
-            return self.sample
+            return self.sample, self.sample_index
         return None
 
     @abc.abstractmethod
@@ -176,8 +184,7 @@ class ReinforcementLearner:
             self.learning_cnt += 1
             self.memory_learning_idx.append(self.training_data_idx)
             self.batch_size = 0
-            return policy_loss
-        return 0
+
     def run(self, num_epoches=100, balance=10000000, discount_factor=0.9, start_epsilon=0.5, learning=True):
         info = "RL:a2c LR:{lr} " \
             "DF:{discount_factor} DRT:{delayed_reward_threshold}".format(
@@ -213,10 +220,11 @@ class ReinforcementLearner:
 
             while True:
                 # 샘플 생성
-                next_sample = self.build_sample(learning)
+                next_sample, next_index = self.build_sample(learning)
                 if next_sample is None:
                     break
                 next_sample = np.split(next_sample, self.num_ticker)
+                next_sample.append(np.array([next_index]))
 
                 # value, policy의 결과에 곱할 시총가중
                 curr_cap = self.environment.get_cap()
@@ -227,14 +235,13 @@ class ReinforcementLearner:
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pred_policy = self.policy_network.predict(next_sample)
-                pred_policy = self.agent.set100(tf.nn.softmax(pred_policy) * curr_cap)
                 pred_policy = self.agent.similar_with_cap(pred_policy)
 
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                 self.agent.renewal_portfolio_ratio(transaction=False)
 
                 # 신경망 또는 탐험에 의한 행동 결정
-                action, ratio, exploration = self.agent.decide_action(pred_policy, curr_cap, epsilon)
+                action, ratio, exploration = self.agent.decide_action(pred_policy, epsilon)
 
                 # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
                 immediate_reward, delayed_reward = self.agent.get_reward()
@@ -246,7 +253,7 @@ class ReinforcementLearner:
                 self.memory_reward.append(immediate_reward)
                 self.memory_value.append(pred_value)
                 self.memory_policy.append(pred_policy)
-                self.memory_cap_policy.append(curr_cap)
+                self.memory_cap_ratio.append(curr_cap)
                 self.memory_pv.append(self.agent.portfolio_value)
                 self.memory_num_stocks.append(self.agent.num_stocks)
 
@@ -262,7 +269,7 @@ class ReinforcementLearner:
                             self.batch_size = 0
                             continue
                         self.batch_size -= 2
-                    l = self.fit(delayed_reward, discount_factor)
+                    self.fit(delayed_reward, discount_factor)
 
             # 에포크 종료 후 학습
             if learning:
@@ -324,15 +331,17 @@ class A2CLearner(ReinforcementLearner):
             reversed(self.memory_value[-batch_size-1:-1]),
             reversed(self.memory_policy[-batch_size-1:-1]),
             reversed(self.memory_reward[-batch_size-1:-1]),
-            reversed(self.memory_cap_policy[-batch_size-1:-1])
+            reversed(self.memory_cap_ratio[-batch_size-1:-1])
         )
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
+        x_index = np.zeros((batch_size, 1, 1, self.num_steps, self.num_index))
         y_value = np.zeros((batch_size, self.num_ticker * self.agent.NUM_ACTIONS), dtype=np.float32)
         y_policy = np.zeros((batch_size, self.num_ticker), dtype=np.float32)
         value_max_next = np.zeros((self.num_ticker,))
         reward_next = self.memory_reward[-1]
         for i, (sample, action, value, policy, reward, cap_ratio) in enumerate(memory):
-            x[i] = np.array(sample)
+            x[i] = np.array(sample[:-1])
+            x_index[i] = np.array(sample[-1])
             r = (delayed_reward + (reward_next - reward) * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next
             advantage = tf.nn.softmax(tf.gather(y_value[i], action) - tf.gather(value, action))
@@ -341,4 +350,6 @@ class A2CLearner(ReinforcementLearner):
             reward_next = reward
 
         # input 형태로 변경
-        return list(np.squeeze(x.swapaxes(0,1), axis=2)), y_value, y_policy
+        x = list(np.squeeze(x.swapaxes(0,1), axis=2))
+        x.append(*np.squeeze(x_index.swapaxes(0,1), axis=2))
+        return x, y_value, y_policy

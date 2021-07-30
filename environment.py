@@ -1,12 +1,14 @@
 class Environment:
 
-    def __init__(self, price_data=None, cap_data=None, ks_data=None):
+    def __init__(self, price_data=None, cap_data=None, index_data=None):
         self.price_data = price_data
         self.cap_data = cap_data
-        self.ks_data = ks_data
+        self.index_data = index_data
+        self.ks_data = index_data.ks200
         self.observe_price = None
         self.observe_cap = None
         self.observe_ks = None
+        self.observe_index = None
         self.idx = -1
 
     def reset(self):
@@ -33,11 +35,11 @@ class Environment:
 
     def get_ks(self):
         if self.observe_ks is not None:
-            return self.observe_ks.values[0]
+            return self.observe_ks
         return None
 
     def get_ks_to_reset(self):
-        return self.ks_data.iloc[0].values[0]
+        return self.ks_data.iloc[0]
 
     def get_date(self):
         return self.ks_data.index[self.idx]

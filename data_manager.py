@@ -9,17 +9,17 @@ conn = pymysql.connect(host='localhost', user='root', password='0000', db='ticke
 curs = conn.cursor()
 
 # ks200 데이터는 따로 받아옴
-sql = f"SELECT * FROM ks200 ORDER BY ks200.date ASC;"
-ks200 = pd.read_sql(sql=sql, con=conn).set_index('date')
+sql = f"SELECT * FROM indexes ORDER BY indexes.date ASC;"
+indexes = pd.read_sql(sql=sql, con=conn).set_index('date')
 capital = pd.read_csv('data/capital.csv', index_col='date', parse_dates=True)
 
-COLUMNS_CHART_DATA = ['date', 'price_mod', 'open', 'high', 'low', 'close', 'volume']
-COLUMNS_TRAINING_DATA_V3 = ['volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'ks200', 'target']
+COLUMNS_CHART_DATA = ['date', 'price_mod', 'open', 'high', 'low', 'close', 'cap']
+COLUMNS_TRAINING_DATA = ['open', 'high', 'low', 'close', 'price_mod', 'volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'netbuy_individual', 'trs_amount']
 
 def set_rebalance_date(criterion_year, end_year):
-    ks200_temp = ks200.copy()
-    ks200_temp['date_temp'] = ks200_temp.index
-    date_df = ks200_temp.groupby(ks200_temp.index.year).last()
+    index_temp = indexes.copy()
+    index_temp['date_temp'] = index_temp.index
+    date_df = index_temp.groupby(index_temp.index.year).last()
     date_df_needs = date_df[(date_df.index >= criterion_year) & (date_df.index < end_year + 1)]
     return date_df_needs.date_temp.values
 
@@ -47,7 +47,11 @@ def get_stock_codes(n, rebalance_date):
 # parameter 초기화를 he_normal
 # input의 범위도 비슷하게 맞춰줌
 def preprocessing(data):
-    for col in COLUMNS_TRAINING_DATA_V3:
+    if 'close' in data.columns:
+        data['open'] = data['open'] / data['close'] - 1
+        data['high'] = data['high'] / data['close'] - 1
+        data['low'] = data['low'] / data['close'] - 1
+    for col in data.columns:
         max_num = data[col].max()
         min_num = data[col].min()
         data[col] = (data[col] - min_num) / (max_num - min_num)
@@ -77,13 +81,15 @@ def fracDiff_FFD(series):
     df = pd.concat(df, axis=1)
     return df
 
+
 def make_data(stock_codes, start_date, end_date, stationary):
+    global indexes
     start_date = pd.Timestamp(str(start_date))
-    start_idx = list(ks200.index).index(start_date)
+    start_idx = list(indexes.index).index(start_date)
     if stationary:
         start_idx += len(w) - 1
-    end_idx = list(ks200.index).index(end_date)
-    date_idx = list(ks200.index)[start_idx:end_idx+1]
+    end_idx = list(indexes.index).index(end_date)
+    date_idx = list(indexes.index)[start_idx:end_idx+1]
 
     training_data_list = []
     training_data_idx = []
@@ -103,7 +109,12 @@ def make_data(stock_codes, start_date, end_date, stationary):
     training_df = pd.concat(training_data_list, keys=training_data_idx)
     training_df = training_df.swaplevel(0,1).sort_index(level=0)
 
-    return price_df.fillna(0), cap_df.fillna(0), ks200.loc[price_df.index], training_df.fillna(0)
+    index_c = indexes.copy().ffill()
+    indexe_ppc = preprocessing(index_c)
+    if stationary:
+        indexe_ppc = fracDiff_FFD(indexe_ppc)
+
+    return price_df.fillna(0), cap_df.fillna(0), indexes.loc[price_df.index], indexe_ppc.loc[price_df.index], training_df.fillna(0)
 
 
 # load_data_sql 한종목을 읽어오는것.
@@ -111,13 +122,12 @@ def load_data_sql(fpath, date_idx, stationary):
     # fpath는 stock_code 로 받음
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
     data = pd.read_sql(sql=sql, con=conn, parse_dates=True)
-    data['ks200'] = ks200.kospi.values
 
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
 
     # 학습 데이터 분리, 전처리
-    training_data = preprocessing(data[COLUMNS_TRAINING_DATA_V3])
+    training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA])
     if stationary:
         training_data = fracDiff_FFD(training_data)
 
@@ -129,7 +139,7 @@ def load_data_sql(fpath, date_idx, stationary):
     # 차트 데이터 분리
     price_data = data['price_mod']
     price_data.name = fpath
-    cap_data = data['volume']
+    cap_data = data['cap']
     cap_data.name = fpath
 
     # date 처리

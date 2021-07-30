@@ -7,7 +7,7 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = [0.001, 0.001]
+    OVER_CAP = [0.01, 0.01]
 
     # 행동
     ACTION_BUY = 0  # 매수
@@ -71,7 +71,10 @@ class Agent:
         self.initial_balance = balance
 
     def set100(self, tensor):
-        return tensor / tf.reduce_sum(tensor)
+        if tf.reduce_sum(tensor):
+            return tensor / tf.reduce_sum(tensor)
+        else:
+            return tensor
 
     def similar_with_cap(self, ratio):
         curr_cap = self.environment.get_cap()
@@ -90,9 +93,9 @@ class Agent:
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
-    def decide_action(self, ratio, curr_cap, epsilon):
+    def decide_action(self, ratio, epsilon):
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
-        diff = tf.clip_by_value(abs(ratio - self.portfolio_ratio), 0, tf.reduce_mean(ratio) / 2)
+        diff = abs(ratio - self.portfolio_ratio)
         action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
 
         # 탐험 여부 결정
@@ -128,9 +131,10 @@ class Agent:
         sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
         sell_trading_value = curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1])
         buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10)
+
         # 거래정지 상태인데 거래하는 경우 방지
         buy_trading_unit = tf.math.floor(self.set100(tf.where(curr_price == 0., 0., buy_trading_ratio)) * \
-                                    (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price==0., 1., curr_price))
+                                    (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price == 0., 1., curr_price))
 
         return buy_trading_unit, sell_trading_unit
 
@@ -155,6 +159,9 @@ class Agent:
             self.base_portfolio_value = self.portfolio_value
             self.base_ks = ks_now
             delayed_reward = self.immediate_reward
+            # print(self.portfolio_ratio)
+            # print(self.base_portfolio_ratio)
+            # print(tf.abs(self.portfolio_ratio - self.base_portfolio_ratio))
         else:
             delayed_reward = np.zeros((self.num_ticker,), dtype='float')
         return self.immediate_reward, delayed_reward

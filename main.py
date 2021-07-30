@@ -28,7 +28,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_stocks', type=int, default=num_stocks)
     parser.add_argument('--lr', type=float, default=0.001)
-    parser.add_argument('--net', choices=['dnn', 'lstm'], default='dnn')
+    parser.add_argument('--net', choices=['dnn', 'lstm'], default='lstm')
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--start_epsilon', type=float, default=0.3)
     parser.add_argument('--balance', type=int, default=1e9)
@@ -101,13 +101,13 @@ if __name__ == '__main__':
     # 리밸런싱 날짜마다 종목구하고 전체 종목 universe 계산
     stock_codes_yearly, stock_codes = get_stock_codes(args.num_stocks, rebalance_date)
     print(f'yearly: {args.num_stocks} total: {len(stock_codes)} stocks in universe')
-    price_data, cap_data, ks_data, training_data = make_data(stock_codes, start_date, rebalance_date[-1], args.stationary)
+    price_data, cap_data, index_data, index_ppc, training_data = make_data(stock_codes, start_date, rebalance_date[-1], args.stationary)
 
     # 공통 파라미터 설정
-    common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'net':args.net,
+    common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':args.net,
                      'delayed_reward_threshold': args.delayed_reward_threshold, 'num_ticker': args.num_stocks, 'hold_criter': args.hold_criter,
                      'num_steps':num_steps, 'lr': args.lr,  'reuse_models': args.reuse_models, 'trainable': args.learning,
-                     'price_data': price_data, 'cap_data': cap_data, 'ks_data' : ks_data, 'training_data': training_data,
+                     'price_data': price_data, 'cap_data': cap_data, 'index_data' : index_data, 'index_ppc':index_ppc, 'training_data': training_data,
                      'output_path': output_path, 'value_network_path': value_network_path, 'policy_network_path': policy_network_path}
 
     learner = A2CLearner(**{**common_params})

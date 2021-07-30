@@ -1,6 +1,7 @@
 # import data_manager
 # import matplotlib.pyplot as plt
 import numpy as np
+
 # from statsmodels.tsa.stattools import adfuller
 import pandas as pd
 
@@ -18,4 +19,6 @@ import pandas as pd
 # plt.plot(df)
 # print(list(df.index).index(pd.Timestamp('20210630')))
 # from datetime import datetime
-print(pd.__version__)
+a = [1,2,3]
+b = np.array([a])
+print(b)
