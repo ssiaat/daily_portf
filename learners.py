@@ -24,32 +24,22 @@ class ReinforcementLearner:
                 output_path='', reuse_models=True):
         # 인자 확인
         assert lr > 0
-        # stock codes 설정
-        self.stock_codes_yearly = stock_codes_yearly
-        self.stock_codes_idx = 0
-        self.stock_codes = stock_codes
 
         # 학습여부 설정
         self.trainable = trainable
         # 환경 설정
-        self.environment = Environment(price_data, cap_data, index_data)
+        self.environment = Environment(price_data, cap_data, index_data, index_ppc, training_data,
+                                       stock_codes_yearly, num_ticker, num_steps, num_features)
         self.net = net
         # 추가 데이터 설정
         self.price_data = price_data
-        self.index_data = index_data
-        self.index_ppc = index_ppc
         self.ks_ret = ((index_data.ks200.iloc[-1] - index_data.ks200.iloc[0]) / index_data.ks200.iloc[0])
 
         # 에이전트 설정
         self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter, delayed_reward_threshold=delayed_reward_threshold)
 
         # 학습 데이터
-        self.training_data = training_data
         self.total_len = len(training_data.index) / num_ticker  # 전체 학습 기간의 날짜 수
-        self.sample = None
-        self.date_list = price_data.index  # 3차원 데이터를 date로 접근해야해서 필요
-        self.year = self.date_list[0].year  # test환경에서 year값이 변하면 종목을 변경해줘야함
-        self.training_data_idx = -1
 
         self.num_ticker = num_ticker
         self.num_features = num_features
@@ -63,7 +53,7 @@ class ReinforcementLearner:
         self.reuse_models = reuse_models
 
         # 메모리
-        self.memory_sample = []
+        self.memory_sample_idx = []
         self.memory_action = []
         self.memory_reward = []
         self.memory_value = []
@@ -72,8 +62,7 @@ class ReinforcementLearner:
         self.memory_pv = []
         self.memory_pr = []
         self.memory_num_stocks = []
-        self.memory_learning_idx = []
-        
+
         # 에포크 관련 정보
         self.value_loss = 0.
         self.policy_loss = 0.
@@ -114,11 +103,6 @@ class ReinforcementLearner:
             self.policy_network.load_model(model_path=self.policy_network_path)
 
     def reset(self):
-        self.sample = None
-        self.stock_codes_idx = 0
-        self.training_data_idx = -1
-        self.year = self.date_list[0].year
-
         # 환경 초기화
         self.environment.reset()
 
@@ -126,7 +110,7 @@ class ReinforcementLearner:
         self.agent.reset()
 
         # 메모리 초기화
-        self.memory_sample = []
+        self.memory_sample_idx = []
         self.memory_action = []
         self.memory_reward = []
         self.memory_value = []
@@ -135,7 +119,6 @@ class ReinforcementLearner:
         self.memory_pv = []
         self.memory_pr = []
         self.memory_num_stocks = []
-        self.memory_learning_idx = []
 
         # 에포크 관련 정보 초기화
         self.value_loss = 0.
@@ -145,21 +128,14 @@ class ReinforcementLearner:
         self.learning_cnt = 0
 
     def build_sample(self, learning):
-        self.environment.observe(self.stock_codes_yearly[self.stock_codes_idx])
-        if int(len(self.training_data) / len(self.stock_codes)) > self.training_data_idx + self.num_steps:
-            self.training_data_idx += 1
-            date_idx = self.date_list[self.training_data_idx:self.training_data_idx+self.num_steps]
-            self.sample = self.training_data.loc[date_idx].reset_index().drop('key_0', axis=1).set_index('level_1')
-            self.sample = self.sample.loc[self.stock_codes_yearly[self.stock_codes_idx]].values
-            self.sample = self.sample.reshape(self.num_ticker, self.num_steps, self.num_features)
-            self.sample_index = self.index_ppc.loc[date_idx].values
-
+        idx = self.environment.observe()
+        sample = None
+        if idx is not None:
+            sample = self.environment.get_training_data(idx)
             # year check
-            if not learning and self.date_list[self.training_data_idx].year != self.year:
-                self.year = self.date_list[self.training_data_idx].year
-                self.stock_codes_idx += 1
-            return self.sample, self.sample_index
-        return None, None
+            if not learning:
+                self.environment.update_stock_codes()
+        return sample, idx
 
     @abc.abstractmethod
     def get_batch(self, batch_size, delayed_reward, discount_factor):
@@ -182,7 +158,6 @@ class ReinforcementLearner:
             self.value_loss += value_loss
             self.policy_loss += policy_loss
             self.learning_cnt += 1
-            self.memory_learning_idx.append(self.training_data_idx)
             self.batch_size = 0
 
     def run(self, num_epoches=100, balance=10000000, discount_factor=0.9, start_epsilon=0.5, learning=True):
@@ -219,12 +194,12 @@ class ReinforcementLearner:
                 epsilon = 0
 
             while True:
-                # 샘플 생성
-                next_sample, next_index = self.build_sample(learning)
-                if next_sample is None:
+                # 샘플 생성, sample = [sample, sample of index]
+                sample, idx = self.build_sample(learning)
+                if sample is None:
                     break
-                next_sample = np.split(next_sample, self.num_ticker)
-                next_sample.append(np.array([next_index]))
+                next_sample = self.environment.transform_sample(sample[0])
+                next_sample.append(np.array([sample[1]]))
 
                 # value, policy의 결과에 곱할 시총가중
                 curr_cap = self.environment.get_cap()
@@ -248,7 +223,7 @@ class ReinforcementLearner:
                 self.agent.act(ratio)
 
                 # 행동 및 행동에 대한 결과를 기억
-                self.memory_sample.append(next_sample)
+                self.memory_sample_idx.append(idx)
                 self.memory_action.append(action + self.modify_action_idx)
                 self.memory_reward.append(immediate_reward)
                 self.memory_value.append(pred_value)
@@ -264,12 +239,13 @@ class ReinforcementLearner:
                 # 지연 보상 발생된 경우 미니 배치 학습
                 if learning and (tf.reduce_sum(delayed_reward) != 0):
                     # 첫날에는 포트폴리오 존재하지 않는 것을 고려해서 batch size조정
-                    if self.batch_size == len(self.memory_sample):
+                    if self.batch_size == len(self.memory_sample_idx):
                         if self.batch_size == 2:
                             self.batch_size = 0
                             continue
                         self.batch_size -= 2
                     self.fit(delayed_reward, discount_factor)
+                print('{:,}' .format(self.agent.portfolio_value))
 
             # 에포크 종료 후 학습
             if learning:
@@ -326,7 +302,7 @@ class A2CLearner(ReinforcementLearner):
     def get_batch(self, batch_size, delayed_reward, discount_factor):
         # 행동에 대한 보상은 다음날 알 수 있음
         memory = zip(
-            reversed(self.memory_sample[-batch_size-1:-1]),
+            reversed(self.memory_sample_idx[-batch_size-1:-1]),
             reversed(self.memory_action[-batch_size-1:-1]),
             reversed(self.memory_value[-batch_size-1:-1]),
             reversed(self.memory_policy[-batch_size-1:-1]),
@@ -339,9 +315,10 @@ class A2CLearner(ReinforcementLearner):
         y_policy = np.zeros((batch_size, self.num_ticker), dtype=np.float32)
         value_max_next = np.zeros((self.num_ticker,))
         reward_next = self.memory_reward[-1]
-        for i, (sample, action, value, policy, reward, cap_ratio) in enumerate(memory):
-            x[i] = np.array(sample[:-1])
-            x_index[i] = np.array(sample[-1])
+        for i, (idx, action, value, policy, reward, cap_ratio) in enumerate(memory):
+            sample = self.environment.get_training_data(idx)
+            x[i] = self.environment.transform_sample(sample[0])
+            x_index[i] = np.array([sample[1]])
             r = (delayed_reward + (reward_next - reward) * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next
             advantage = tf.nn.softmax(tf.gather(y_value[i], action) - tf.gather(value, action))
