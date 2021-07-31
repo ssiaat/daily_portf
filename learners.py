@@ -245,7 +245,7 @@ class ReinforcementLearner:
                             continue
                         self.batch_size -= 2
                     self.fit(delayed_reward, discount_factor)
-                print('{:,}' .format(self.agent.portfolio_value))
+                    print('{:,}' .format(self.agent.portfolio_value))
 
             # 에포크 종료 후 학습
             if learning:

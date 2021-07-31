@@ -1,11 +1,10 @@
 import os
 import threading
-import numpy as np
 
 print(f'Keras Backend : {os.environ["KERAS_BACKEND"]}')
 
 from keras.models import Model, Sequential
-from keras.layers import Dense, BatchNormalization, LSTM, LayerNormalization, Concatenate, MultiHeadAttention
+from keras.layers import Dense, BatchNormalization, Dropout, LSTM, LayerNormalization, Concatenate, MultiHeadAttention
 from tensorflow.keras.initializers import he_normal, glorot_normal
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import mean_squared_error as mse
@@ -62,19 +61,19 @@ class DNN(Network):
 
     def residual_layer(self, inp, hidden_size):
         output_r = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(inp)
-        output_r = BatchNormalization(trainable=self.trainable)(output_r)
+        output_r = Dropout(0.1, trainable=self.trainable)(output_r)
         output = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(output_r)
-        output = BatchNormalization(trainable=self.trainable)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
         output = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = BatchNormalization(trainable=self.trainable)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
         return output + output_r
 
     def mini_dnn(self):
         model = Sequential()
         model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
-        model.add(BatchNormalization(trainable=self.trainable))
+        model.add(Dropout(0.1, trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
-        model.add(BatchNormalization(trainable=self.trainable))
+        model.add(Dropout(0.1, trainable=self.trainable))
         return model
 
     def get_network(self, inp):
@@ -82,9 +81,9 @@ class DNN(Network):
         output = [m(tf.reshape(i, (-1, self.input_dim))) for i,m in zip(inp[:-1], self.sub_models[:-1])]
         output.append(self.sub_models[-1](tf.reshape(inp[-1], (-1, self.num_index))))
         output = Concatenate()(output)
-        output = self.residual_layer(output, 2048)
-        output = self.residual_layer(output, 1024)
-        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = self.residual_layer(output, 512)
+        output = self.residual_layer(output, 256)
+        output = Dense(128, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(output)
         output = tf.reshape(output, (-1, self.output_dim))
         return Model(inp, output)

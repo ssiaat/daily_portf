@@ -29,12 +29,12 @@ class Environment:
         self.idx = -1
 
     def observe(self):
-        if len(self.price_data) > self.idx + 1:
+        if len(self.price_data) > self.idx + self.num_steps + 1:
             self.idx += 1
             stock_codes = self.stock_codes_yearly[self.stock_codes_idx]
-            self.observe_price = self.price_data.iloc[self.idx][stock_codes]
-            self.observe_cap = self.cap_data.iloc[self.idx][stock_codes]
-            self.observe_ks = self.ks_data.iloc[self.idx]
+            self.observe_price = self.price_data.iloc[self.idx + self.num_steps - 1][stock_codes]
+            self.observe_cap = self.cap_data.iloc[self.idx + self.num_steps - 1][stock_codes]
+            self.observe_ks = self.ks_data.iloc[self.idx + self.num_steps - 1]
             return self.idx
         return None
 
@@ -57,7 +57,7 @@ class Environment:
         return self.ks_data.iloc[0]
 
     def get_date(self):
-        return self.ks_data.index[self.idx]
+        return self.ks_data.index[self.idx + self.num_steps - 1]
 
     def get_training_data(self, idx):
         date_idx = self.date_list[idx:idx + self.num_steps]
