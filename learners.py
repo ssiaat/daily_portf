@@ -281,7 +281,7 @@ class ReinforcementLearner:
 
             # 학습 관련 정보 갱신
             max_portfolio_value = max(max_portfolio_value, self.agent.portfolio_value)
-            if self.agent.portfolio_value > self.agent.initial_balance:
+            if self.agent.profitloss > 0:
                 epoch_win_cnt += 1
 
         # 종료 시간
