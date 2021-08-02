@@ -70,7 +70,7 @@ class DNN(Network):
 
     def mini_dnn(self):
         model = Sequential()
-        model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
+        model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
         model.add(Dropout(0.1, trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
         model.add(Dropout(0.1, trainable=self.trainable))
@@ -81,9 +81,10 @@ class DNN(Network):
         output = [m(tf.reshape(i, (-1, self.input_dim))) for i,m in zip(inp[:-1], self.sub_models[:-1])]
         output.append(self.sub_models[-1](tf.reshape(inp[-1], (-1, self.num_index))))
         output = Concatenate()(output)
-        output = self.residual_layer(output, 512)
-        output = self.residual_layer(output, 256)
-        output = Dense(128, activation=self.activation, kernel_initializer=self.initializer)(output)
+        # output = self.residual_layer(output, 256)
+        # output = self.residual_layer(output, 128)
+        output = Dense(1024, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(output)
         output = tf.reshape(output, (-1, self.output_dim))
         return Model(inp, output)

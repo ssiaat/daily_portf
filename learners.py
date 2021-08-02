@@ -14,6 +14,8 @@ from networks import DNN, AttentionLSTM
 
 import tensorflow as tf
 
+print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
+
 class ReinforcementLearner:
     __metaclass__ = abc.ABCMeta
     lock = threading.Lock()
