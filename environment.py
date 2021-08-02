@@ -83,7 +83,7 @@ class Environment:
     def update_stock_codes(self):
         if len(self.price_data) > self.idx + self.num_steps:
             if self.date_list[self.idx + self.num_steps].year != self.year:
-                self.last_universe = self.universe
+                self.last_universe = self.universe.copy()
                 self.year = self.date_list[self.idx + self.num_steps].year
                 self.stock_codes_idx += 1
                 diff_universe = [x for x in self.stock_codes_yearly[self.stock_codes_idx] if x not in self.last_universe]

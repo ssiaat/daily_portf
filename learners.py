@@ -1,7 +1,8 @@
 import os
 import logging
 import abc
-
+import random
+from collections import deque
 import threading
 import time
 import numpy as np
@@ -53,14 +54,11 @@ class ReinforcementLearner:
         self.reuse_models = reuse_models
 
         # 메모리
-        self.memory_sample_idx = []
+        self.memory_sample_idx = deque(maxlen=200)
         self.memory_action = []
         self.memory_reward = []
-        self.memory_reward_next = []
         self.memory_value = []
-        self.memory_value_max_next = []
         self.memory_policy = []
-        self.memory_cap_ratio = []
         self.memory_pv = []
         self.memory_pr = []
         self.memory_num_stocks = []
@@ -119,11 +117,8 @@ class ReinforcementLearner:
         self.memory_sample_idx = []
         self.memory_action = []
         self.memory_reward = []
-        self.memory_reward_next = []
         self.memory_value = []
-        self.memory_value_max_next = []
         self.memory_policy = []
-        self.memory_cap_ratio = []
         self.memory_pv = []
         self.memory_pr = []
         self.memory_num_stocks = []
@@ -157,6 +152,7 @@ class ReinforcementLearner:
 
     def fit(self, delayed_reward, discount_factor, full=False):
         batch_size = len(self.memory_reward) - 2 if full else self.batch_size
+
         # 배치 학습 데이터 생성 및 신경망 갱신
         if batch_size > 0:
             value_loss, policy_loss = self.update_networks(batch_size, delayed_reward, discount_factor)
@@ -235,7 +231,6 @@ class ReinforcementLearner:
                 self.memory_reward.append(immediate_reward)
                 self.memory_value.append(pred_value)
                 self.memory_policy.append(pred_policy)
-                self.memory_cap_ratio.append(curr_cap)
                 self.memory_pv.append(self.agent.portfolio_value)
                 self.memory_num_stocks.append(self.agent.num_stocks)
 
@@ -326,7 +321,6 @@ class A2CLearner(ReinforcementLearner):
             reversed(self.memory_value[-batch_size-1:-1]),
             reversed(self.memory_policy[-batch_size-1:-1]),
             reversed(self.memory_reward[-batch_size-1:-1]),
-            reversed(self.memory_cap_ratio[-batch_size-1:-1])
         )
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
         x_index = np.zeros((batch_size, 1, 1, self.num_steps, self.num_index))
@@ -334,16 +328,39 @@ class A2CLearner(ReinforcementLearner):
         y_policy = np.zeros((batch_size, self.num_ticker), dtype=np.float32)
         value_max_next = np.zeros((self.num_ticker,))
         reward_next = self.memory_reward[-1]
-        for i, (idx, action, value, policy, reward, cap_ratio) in enumerate(memory):
+        for i, (idx, action, value, policy, reward) in enumerate(memory):
             sample = self.environment.get_training_data(idx)
             x[i] = self.environment.transform_sample(sample[0])
             x_index[i] = np.array([sample[1]])
             r = (delayed_reward + (reward_next - reward) * 2) * 100
             y_value[i, action] = r + discount_factor * value_max_next
             advantage = tf.nn.softmax(tf.gather(y_value[i], action) - tf.gather(value, action))
-            y_policy[i] = self.agent.set100(tf.where(cap_ratio == 0., 0., advantage))
+            y_policy[i] = self.agent.set100(advantage)
             value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
             reward_next = reward
+
+        # input 형태로 변경
+        x = list(np.squeeze(x.swapaxes(0,1), axis=2))
+        x.append(*np.squeeze(x_index.swapaxes(0,1), axis=2))
+        return x, y_value, y_policy
+
+    def get_batch_sampling(self, discount_factor):
+        batch_size = 5
+        idx_batch = random.sample(self.memory_sample_idx[:-1], batch_size)
+        # 행동에 대한 보상은 다음날 알 수 있음
+        x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
+        x_index = np.zeros((batch_size, 1, 1, self.num_steps, self.num_index))
+        y_value = np.zeros((batch_size, self.num_ticker * self.agent.NUM_ACTIONS), dtype=np.float32)
+        y_policy = np.zeros((batch_size, self.num_ticker), dtype=np.float32)
+        for i, idx in enumerate(idx_batch):
+            action = self.memory_action[idx]
+            sample = self.environment.get_training_data(idx)
+            x[i] = self.environment.transform_sample(sample[0])
+            x_index[i] = np.array([sample[1]])
+            r = (self.memory_reward[idx+1] - self.memory_reward[idx]) * 100
+            y_value[i, action] = r + discount_factor * tf.reduce_max(self.memory_value[idx+1])  # r + gamma * max(next value)
+            advantage = tf.nn.softmax(tf.gather(y_value[i], action) - tf.gather(self.memory_value[idx], action))
+            y_policy[i] = self.agent.set100(advantage)
 
         # input 형태로 변경
         x = list(np.squeeze(x.swapaxes(0,1), axis=2))

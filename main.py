@@ -68,7 +68,7 @@ if __name__ == '__main__':
         reuse_models = True
     else:
         print('This running is for training')
-    start_date = indexes.index[indexes.index.year == start_year][200]
+    start_date = indexes.index[indexes.index.year == start_year][0]
 
     if net == 'dnn':
         num_steps = 1

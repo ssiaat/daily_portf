@@ -90,8 +90,8 @@ class Agent:
                 curr_price = self.environment.get_price_last_portf()
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
-                # 매도 수수료는 balance에 반영
-                self.portfolio_value_each -= tf.math.floor(buy_value_each * self.TRADING_TAX[0])
+                # 매도 수수료는 balance에 반영 -> 매수만 반영
+                self.portfolio_value_each -= tf.math.ceil(buy_value_each * self.TRADING_TAX[0])
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
@@ -142,7 +142,7 @@ class Agent:
 
         # 거래정지 상태인데 거래하는 경우 방지
         sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
-        sell_trading_value = tf.math.floor(curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1]))
+        sell_trading_value = tf.math.ceil(curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1]))
 
         buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10)
         curr_price = self.environment.get_price()
