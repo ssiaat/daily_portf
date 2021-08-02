@@ -17,7 +17,7 @@ class ReinforcementLearner:
     __metaclass__ = abc.ABCMeta
     lock = threading.Lock()
 
-    def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=False, net='dnn',
+    def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=True, net='dnn', test=False,
                 price_data=None, cap_data=None, index_data=None, index_ppc=None, training_data=None, num_steps=5,
                 hold_criter=0., delayed_reward_threshold=.05, num_ticker=100, num_features=7, num_index=5, lr=0.001,
                 value_network=None, policy_network=None, value_network_path=None, policy_network_path=None,
@@ -27,6 +27,7 @@ class ReinforcementLearner:
 
         # 학습여부 설정
         self.trainable = trainable
+        self.test = test
         # 환경 설정
         self.environment = Environment(price_data, cap_data, index_data, index_ppc, training_data,
                                        stock_codes_yearly, num_ticker, num_steps, num_features)
@@ -40,7 +41,6 @@ class ReinforcementLearner:
 
         # 학습 데이터
         self.total_len = len(training_data.index) / num_ticker  # 전체 학습 기간의 날짜 수
-
         self.num_ticker = num_ticker
         self.num_features = num_features
         self.num_index = num_index
@@ -78,6 +78,9 @@ class ReinforcementLearner:
         # action 조정 ([0,1,0,0,1] => [0,3,4,6,9]
         self.modify_action_idx = np.array([i*2 for i in range(self.num_ticker)])
 
+        # flag
+        self.diff_stocks_idx = None
+
     def init_value_network(self, activation='linear'):
         if self.net == 'dnn':
             self.value_network = DNN(input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
@@ -88,7 +91,8 @@ class ReinforcementLearner:
                                                num_steps=self.num_steps, num_index=self.num_index, trainable=self.trainable, lr=self.lr,
                                                activation=activation)
         if self.reuse_models and os.path.exists(self.value_network_path):
-                self.value_network.load_model(model_path=self.value_network_path)
+            print('reuse')
+            self.value_network.load_model(model_path=self.value_network_path)
 
     def init_policy_network(self, activation='linear'):
         if self.net == 'dnn':
@@ -127,14 +131,11 @@ class ReinforcementLearner:
         self.batch_size = 0
         self.learning_cnt = 0
 
-    def build_sample(self, learning):
+    def build_sample(self):
         idx = self.environment.observe()
         sample = None
         if idx is not None:
             sample = self.environment.get_training_data(idx)
-            # year check
-            if not learning:
-                self.environment.update_stock_codes()
         return sample, idx
 
     @abc.abstractmethod
@@ -160,7 +161,7 @@ class ReinforcementLearner:
             self.learning_cnt += 1
             self.batch_size = 0
 
-    def run(self, num_epoches=100, balance=10000000, discount_factor=0.9, start_epsilon=0.5, learning=True):
+    def run(self, num_epoches=100, balance=10000000, discount_factor=0.9, start_epsilon=0.5):
         info = "RL:a2c LR:{lr} " \
             "DF:{discount_factor} DRT:{delayed_reward_threshold}".format(
             lr=self.lr, discount_factor=discount_factor,
@@ -188,14 +189,14 @@ class ReinforcementLearner:
             self.reset()
 
             # 학습을 진행할 수록 탐험 비율 감소
-            if learning:
+            if not self.test:
                 epsilon = start_epsilon  * (1. - float(epoch) / (num_epoches - 1))
             else:
                 epsilon = 0
 
             while True:
                 # 샘플 생성, sample = [sample, sample of index]
-                sample, idx = self.build_sample(learning)
+                sample, idx = self.build_sample()
                 if sample is None:
                     break
                 next_sample = self.environment.transform_sample(sample[0])
@@ -213,14 +214,16 @@ class ReinforcementLearner:
                 pred_policy = self.agent.similar_with_cap(pred_policy)
 
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
-                self.agent.renewal_portfolio_ratio(transaction=False)
+                self.agent.renewal_portfolio_ratio(transaction=False, diff_stock_idx=self.diff_stocks_idx)
 
                 # 신경망 또는 탐험에 의한 행동 결정
                 action, ratio, exploration = self.agent.decide_action(pred_policy, epsilon)
 
                 # 결정한 행동을 수행하고 즉시 보상과 지연 보상 획득
+                # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
                 immediate_reward, delayed_reward = self.agent.get_reward()
-                self.agent.act(ratio)
+                self.agent.act(ratio, self.diff_stocks_idx)
+                self.diff_stocks_idx = None
 
                 # 행동 및 행동에 대한 결과를 기억
                 self.memory_sample_idx.append(idx)
@@ -237,7 +240,7 @@ class ReinforcementLearner:
                 self.itr_cnt += 1
 
                 # 지연 보상 발생된 경우 미니 배치 학습
-                if learning and (tf.reduce_sum(delayed_reward) != 0):
+                if tf.reduce_sum(delayed_reward) != 0:
                     # 첫날에는 포트폴리오 존재하지 않는 것을 고려해서 batch size조정
                     if self.batch_size == len(self.memory_sample_idx):
                         if self.batch_size == 2:
@@ -247,9 +250,14 @@ class ReinforcementLearner:
                     self.fit(delayed_reward, discount_factor)
                     print('{:,}' .format(self.agent.portfolio_value))
 
+                # test는 연도별로 종목 갱신, 하루 끝나고 매일 체크
+                if self.test:
+                    self.diff_stocks_idx = self.environment.update_stock_codes()
+                    if self.diff_stocks_idx:
+                        print('change universe')
+
             # 에포크 종료 후 학습
-            if learning:
-                self.fit(self.agent.profitloss * tf.abs(self.agent.portfolio_ratio - self.agent.base_portfolio_ratio), discount_factor, full=True)
+            self.fit(self.agent.profitloss * tf.abs(self.agent.portfolio_ratio - self.agent.base_portfolio_ratio), discount_factor, full=True)
             print(f'differ between port and cap: {self.agent.portfolio_ratio - self.environment.get_cap()}')
 
             # 에포크 관련 정보 로그 기록
@@ -284,10 +292,17 @@ class ReinforcementLearner:
                 max_pv=max_portfolio_value, cnt_win=epoch_win_cnt))
 
     def save_models(self):
+        if self.test:
+            value_output_path = self.value_network_path[:-3] + '_output' + self.value_network_path[-3:]
+            policy_network_path = self.policy_network_path[:-3] + '_output' + self.policy_network_path[-3:]
+            pd.DataFrame(self.memory_pv, index=self.price_data.index, columns=['pv']).to_csv('models/test_result.csv')
+        else:
+            value_output_path = self.value_network_path
+            policy_network_path = self.policy_network_path
         if self.value_network is not None and self.value_network_path is not None:
-            self.value_network.save_model(self.value_network_path)
+            self.value_network.save_model(value_output_path)
         if self.policy_network is not None and self.policy_network_path is not None:
-            self.policy_network.save_model(self.policy_network_path)
+            self.policy_network.save_model(policy_network_path)
 
 class A2CLearner(ReinforcementLearner):
     def __init__(self, *args, value_network_path=None, policy_network_path=None, **kwargs):

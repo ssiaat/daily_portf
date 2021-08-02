@@ -4,7 +4,8 @@ import numpy as np
 
 # from statsmodels.tsa.stattools import adfuller
 import pandas as pd
-
+import os
+#
 # out = pd.DataFrame(columns=['adfStat', 'pVal', 'lags', 'nObs', '95%conf', 'corr'])
 # df = data_manager.ks200
 # for d in np.linspace(0,1,11):
@@ -19,6 +20,18 @@ import pandas as pd
 # plt.plot(df)
 # print(list(df.index).index(pd.Timestamp('20210630')))
 # from datetime import datetime
-a = [1,2,3]
-b = np.array([a])
-print(b)
+def get_weights_FFD(d, thres):
+    w, k = [1.], 1
+    while True:
+        w_ = -w[-1] / k * (d - k + 1)
+        if abs(w_) < thres:
+            break
+        w.append(w_)
+        k+=1
+    return np.array(w[::-1]).reshape(-1,)
+
+a = np.random.random((300,))
+b = np.random.random((300,))
+df = pd.DataFrame([a,b]).T
+w = get_weights_FFD(0.6, 1e-4)
+print(df.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna())

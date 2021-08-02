@@ -16,11 +16,11 @@ capital = pd.read_csv('data/capital.csv', index_col='date', parse_dates=True)
 COLUMNS_CHART_DATA = ['date', 'price_mod', 'open', 'high', 'low', 'close', 'cap']
 COLUMNS_TRAINING_DATA = ['open', 'high', 'low', 'close', 'price_mod', 'volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'netbuy_individual', 'trs_amount']
 
-def set_rebalance_date(criterion_year, end_year):
+def set_rebalance_date(start_year, end_year):
     index_temp = indexes.copy()
     index_temp['date_temp'] = index_temp.index
     date_df = index_temp.groupby(index_temp.index.year).last()
-    date_df_needs = date_df[(date_df.index >= criterion_year) & (date_df.index < end_year + 1)]
+    date_df_needs = date_df[(date_df.index >= start_year) & (date_df.index < end_year + 1)]
     return date_df_needs.date_temp.values
 
 # 특정 시점 기준 시총 상위 n개 ticker 가져옴
@@ -65,26 +65,13 @@ def get_weights_FFD(d, thres):
             break
         w.append(w_)
         k+=1
-    return np.array(w[::-1]).reshape(-1,1)
+    return np.array(w[::-1]).reshape(-1,)
 
 w = get_weights_FFD(0.6, 1e-4)
-def fracDiff_FFD(series):
-    width, df = len(w)-1, {}
-    for name in series.columns:
-        seriesF, df_ = series[[name]].fillna(0), pd.Series()
-        for iloc1 in range(width, seriesF.shape[0]):
-            loc0, loc1 = seriesF.index[iloc1 - width], seriesF.index[iloc1]
-            if not np.isfinite(series.loc[loc1, name]):
-                continue
-            df_[loc1] = np.dot(w.T, seriesF.loc[loc0:loc1])[0,0]
-        df[name] = df_.copy(deep=True)
-    df = pd.concat(df, axis=1)
-    return df
 
 
 def make_data(stock_codes, start_date, end_date, stationary):
     global indexes
-    start_date = pd.Timestamp(str(start_date))
     start_idx = list(indexes.index).index(start_date)
     if stationary:
         start_idx += len(w) - 1
@@ -103,7 +90,7 @@ def make_data(stock_codes, start_date, end_date, stationary):
         training_data_list.append(training_data)
         price_df = pd.concat([price_df, price_data], axis=1)
         cap_df = pd.concat([cap_df, cap_data], axis=1)
-    cap_df = (cap_df.T / cap_df.sum(axis=1)).T
+
     # training_df 는 3차원으로 설정
     # date -> stock code -> data
     training_df = pd.concat(training_data_list, keys=training_data_idx)
@@ -112,7 +99,7 @@ def make_data(stock_codes, start_date, end_date, stationary):
     index_c = indexes.copy().ffill()
     indexe_ppc = preprocessing(index_c)
     if stationary:
-        indexe_ppc = fracDiff_FFD(indexe_ppc)
+        indexe_ppc = indexe_ppc.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
     return price_df.fillna(0), cap_df.fillna(0), indexes.loc[price_df.index], indexe_ppc.loc[price_df.index], training_df.fillna(0)
 
@@ -129,7 +116,7 @@ def load_data_sql(fpath, date_idx, stationary):
     # 학습 데이터 분리, 전처리
     training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA])
     if stationary:
-        training_data = fracDiff_FFD(training_data)
+        training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
     # index 조정
     temp = pd.DataFrame(index=date_idx)

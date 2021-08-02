@@ -83,15 +83,20 @@ class Agent:
         ratio = self.set100(tf.clip_by_value(ratio, curr_cap - self.OVER_CAP[1], curr_cap + self.OVER_CAP[0]))
         return ratio
 
-    def renewal_portfolio_ratio(self, transaction, buy_value_each=None):
+    def renewal_portfolio_ratio(self, transaction, buy_value_each=None, diff_stock_idx=None):
         if tf.reduce_sum(self.num_stocks) > 0:
             curr_price = self.environment.get_price()
+            if diff_stock_idx is not None:
+                t = self.environment.price_data.iloc[self.environment.idx + self.environment.num_steps - 2][self.environment.stock_codes_yearly[self.environment.stock_codes_idx-1]]
+                curr_price = self.environment.get_price_last_portf()
+                print(((curr_price-t)/t).max())
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
                 # 매도 수수료는 balance에 반영
-                self.portfolio_value_each -= buy_value_each * self.TRADING_TAX[0]
+                self.portfolio_value_each -= tf.math.floor(buy_value_each * self.TRADING_TAX[0])
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
+
 
     def decide_action(self, ratio, epsilon):
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
@@ -124,13 +129,31 @@ class Agent:
 
         return action, ratio, exploration
 
-    def decide_trading_unit(self, ratio, curr_price):
+    def decide_trading_unit(self, ratio, diff_stocks_idx=None):
+        curr_price = self.environment.get_price()
+        if diff_stocks_idx is not None:
+            curr_price = self.environment.get_price_last_portf()
         sell_trading_unit = tf.math.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * \
                                      self.portfolio_value_each / np.where(curr_price == 0., 1., curr_price))
+
+        # 변경 종목 idx중 기존 종목 모두 매도
+        if diff_stocks_idx is not None:
+            if tf.is_tensor(sell_trading_unit):
+                sell_trading_unit = tf.make_ndarray(tf.make_tensor_proto(sell_trading_unit))
+            sell_trading_unit[diff_stocks_idx] = tf.gather(self.num_stocks, diff_stocks_idx)
+
         # 거래정지 상태인데 거래하는 경우 방지
         sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
-        sell_trading_value = curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1])
+        sell_trading_value = tf.math.floor(curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1]))
+
         buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10)
+        curr_price = self.environment.get_price()
+
+        # 새로운 종목 모두 매수
+        if diff_stocks_idx is not None:
+            if tf.is_tensor(buy_trading_ratio):
+                buy_trading_ratio = tf.make_ndarray(tf.make_tensor_proto(buy_trading_ratio))
+            buy_trading_ratio[diff_stocks_idx] = tf.gather(ratio, diff_stocks_idx)
 
         # 거래정지 상태인데 거래하는 경우 방지
         buy_trading_unit = tf.math.floor(self.set100(tf.where(curr_price == 0., 0., buy_trading_ratio)) * \
@@ -159,26 +182,25 @@ class Agent:
             self.base_portfolio_value = self.portfolio_value
             self.base_ks = ks_now
             delayed_reward = self.immediate_reward
-            # print(self.portfolio_ratio)
-            # print(self.base_portfolio_ratio)
-            # print(tf.abs(self.portfolio_ratio - self.base_portfolio_ratio))
         else:
             delayed_reward = np.zeros((self.num_ticker,), dtype='float')
         return self.immediate_reward, delayed_reward
 
-    def act(self, ratio):
+    def act(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()
-        ratio = self.similar_with_cap(ratio)
 
         # 거래 수량, 금액 결정
-        buy_unit, sell_unit = self.decide_trading_unit(ratio, curr_price)
+        buy_unit, sell_unit = self.decide_trading_unit(ratio, diff_stocks_idx)
         buy_value_each = buy_unit * curr_price
-        sell_value_each = sell_unit * curr_price
+        if diff_stocks_idx is None:
+            sell_value_each = sell_unit * curr_price
+        else:
+            sell_value_each = sell_unit * self.environment.get_price_last_portf()
         self.num_stocks += buy_unit - sell_unit
 
         # 매도 수수료는 바로 반영, 매수 수수료는 장부가치에 반영
-        buy_value = tf.reduce_sum(buy_value_each)
-        sell_value = tf.reduce_sum(sell_value_each) * (1 - self.TRADING_TAX[1])
+        buy_value = tf.cast(tf.reduce_sum(buy_value_each), dtype=tf.float32)
+        sell_value = tf.cast(tf.reduce_sum(sell_value_each) * (1 - self.TRADING_TAX[1]), dtype=tf.float32)
         self.balance = sell_value + self.balance - buy_value
 
         # 포트폴리오 가치 갱신, 거래세 반영
