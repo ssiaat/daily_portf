@@ -117,7 +117,7 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     data = data.set_index('date').loc[data_del_na.date]
 
     # 학습 데이터 분리, 전처리
-    training_data = preprocessing(data.loc[date_idx].copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
+    training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
     if stationary:
         training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
