@@ -58,7 +58,6 @@ class ReinforcementLearner:
         self.memory_action = []
         self.memory_reward = []
         self.memory_value = []
-        self.memory_policy = []
         self.memory_pv = []
         self.memory_pr = []
         self.memory_num_stocks = []
@@ -118,7 +117,6 @@ class ReinforcementLearner:
         self.memory_action = []
         self.memory_reward = []
         self.memory_value = []
-        self.memory_policy = []
         self.memory_pv = []
         self.memory_pr = []
         self.memory_num_stocks = []
@@ -230,9 +228,7 @@ class ReinforcementLearner:
                 self.memory_action.append(action + self.modify_action_idx)
                 self.memory_reward.append(immediate_reward)
                 self.memory_value.append(pred_value)
-                self.memory_policy.append(pred_policy)
                 self.memory_pv.append(self.agent.portfolio_value)
-                self.memory_num_stocks.append(self.agent.num_stocks)
 
                 # 반복에 대한 정보 갱신
                 self.batch_size += 1
@@ -319,7 +315,6 @@ class A2CLearner(ReinforcementLearner):
             reversed(self.memory_sample_idx[-batch_size-1:-1]),
             reversed(self.memory_action[-batch_size-1:-1]),
             reversed(self.memory_value[-batch_size-1:-1]),
-            reversed(self.memory_policy[-batch_size-1:-1]),
             reversed(self.memory_reward[-batch_size-1:-1]),
         )
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
@@ -328,7 +323,7 @@ class A2CLearner(ReinforcementLearner):
         y_policy = np.zeros((batch_size, self.num_ticker), dtype=np.float32)
         value_max_next = np.zeros((self.num_ticker,))
         reward_next = self.memory_reward[-1]
-        for i, (idx, action, value, policy, reward) in enumerate(memory):
+        for i, (idx, action, value, reward) in enumerate(memory):
             sample = self.environment.get_training_data(idx)
             x[i] = self.environment.transform_sample(sample[0])
             x_index[i] = np.array([sample[1]])

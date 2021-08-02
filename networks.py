@@ -104,15 +104,10 @@ class AttentionLSTM(Network):
         self.mha = MultiHeadAttention(8, 8)
         self.model = self.get_network(inp)
 
-    # expand input at first time
-    def shared_dnn(self, inp):
-        return Dense(128, activation='tanh', kernel_initializer=self.initializer)(inp)
-
     # after expand input, calculate hidden state of input sequences
     def mini_model(self):
         model = Sequential()
-        model.add(LSTM(self.hidden_size_lstm * 2, dropout=0.1, return_sequences=True, stateful=False, kernel_initializer=self.initializer))
-        model.add(LayerNormalization(trainable=self.trainable))
+        model.add(Dense(64, activation=self.activation, kernel_initializer=self.initializer))
         model.add(LSTM(self.hidden_size_lstm, dropout=0.1, return_sequences=True, stateful=False, kernel_initializer=self.initializer))
         model.add(LayerNormalization(trainable=self.trainable))
         return model
@@ -134,7 +129,7 @@ class AttentionLSTM(Network):
 
     def get_network(self, inp):
         context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i,m in zip(inp, self.sub_models)]
-        context_vectors = [context_vectors[0] + cv for cv in context_vectors[1:]]
+        context_vectors = [context_vectors[-1] + cv for cv in context_vectors[:-1]]
         h = Concatenate(axis=1)(context_vectors)
 
         # attention model
@@ -142,6 +137,7 @@ class AttentionLSTM(Network):
         h_hat = self.mha(*qkv)
 
         hidden_h = Dense(self.hidden_size_lstm * 4, activation=self.activation, kernel_initializer=self.initializer)(h + h_hat)
+        hidden_h = Dropout(0.1, trainable=self.trainable)
         hidden_h = Dense(self.hidden_size_lstm, activation=self.activation, kernel_initializer=self.initializer)(hidden_h)
         h_p = tf.math.tanh(h + h_hat + hidden_h)
 
