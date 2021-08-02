@@ -1,4 +1,4 @@
-# import data_manager
+import data_manager
 # import matplotlib.pyplot as plt
 import numpy as np
 
@@ -20,18 +20,4 @@ import os
 # plt.plot(df)
 # print(list(df.index).index(pd.Timestamp('20210630')))
 # from datetime import datetime
-def get_weights_FFD(d, thres):
-    w, k = [1.], 1
-    while True:
-        w_ = -w[-1] / k * (d - k + 1)
-        if abs(w_) < thres:
-            break
-        w.append(w_)
-        k+=1
-    return np.array(w[::-1]).reshape(-1,)
-
-a = np.random.random((300,))
-b = np.random.random((300,))
-df = pd.DataFrame([a,b]).T
-w = get_weights_FFD(0.6, 1e-4)
-print(df.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna())
+print(data_manager.indexes.ks200.iloc[0])

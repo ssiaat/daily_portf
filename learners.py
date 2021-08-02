@@ -56,7 +56,9 @@ class ReinforcementLearner:
         self.memory_sample_idx = []
         self.memory_action = []
         self.memory_reward = []
+        self.memory_reward_next = []
         self.memory_value = []
+        self.memory_value_max_next = []
         self.memory_policy = []
         self.memory_cap_ratio = []
         self.memory_pv = []
@@ -117,7 +119,9 @@ class ReinforcementLearner:
         self.memory_sample_idx = []
         self.memory_action = []
         self.memory_reward = []
+        self.memory_reward_next = []
         self.memory_value = []
+        self.memory_value_max_next = []
         self.memory_policy = []
         self.memory_cap_ratio = []
         self.memory_pv = []
@@ -248,13 +252,13 @@ class ReinforcementLearner:
                             continue
                         self.batch_size -= 2
                     self.fit(delayed_reward, discount_factor)
-                    print('{:,}' .format(self.agent.portfolio_value))
+                    print('{:,} {:.4f}' .format(self.agent.portfolio_value, (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
 
                 # test는 연도별로 종목 갱신, 하루 끝나고 매일 체크
                 if self.test:
                     self.diff_stocks_idx = self.environment.update_stock_codes()
                     if self.diff_stocks_idx:
-                        print('change universe')
+                        print(f'change universe  {len(self.diff_stocks_idx)}')
 
             # 에포크 종료 후 학습
             self.fit(self.agent.profitloss * tf.abs(self.agent.portfolio_ratio - self.agent.base_portfolio_ratio), discount_factor, full=True)

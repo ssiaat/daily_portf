@@ -17,7 +17,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 num_stocks = 200  # universe에 존재하는 종목수
 num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
 start_year = 2015 # 시작 연도
-end_year = 2017   # 종료 연도
+end_year = 2015   # 종료 연도
 
 lr = 0.001
 net = 'dnn'

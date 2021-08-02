@@ -26,6 +26,7 @@ class Environment:
         self.year = self.date_list[0].year  # test환경에서 year값이 변하면 종목을 변경해줘야함
 
         self.universe = self.stock_codes_yearly[self.stock_codes_idx]
+        self.last_universe = None
 
     def reset(self):
         self.idx = -1
@@ -47,8 +48,7 @@ class Environment:
 
     # 종목 변경 시 지난 포트폴리오의 현재 가격 얻어올 때 사용
     def get_price_last_portf(self):
-        stock_codes = self.stock_codes_yearly[self.stock_codes_idx - 1]
-        return self.price_data.iloc[self.idx + self.num_steps - 1][stock_codes].values.reshape(-1,)
+        return self.price_data.iloc[self.idx + self.num_steps - 1][self.last_universe].values.reshape(-1,)
 
     def get_cap(self):
         if self.observe_cap is not None:
@@ -83,13 +83,13 @@ class Environment:
     def update_stock_codes(self):
         if len(self.price_data) > self.idx + self.num_steps:
             if self.date_list[self.idx + self.num_steps].year != self.year:
-                last_universe = self.universe
+                self.last_universe = self.universe
                 self.year = self.date_list[self.idx + self.num_steps].year
                 self.stock_codes_idx += 1
-                diff_universe = [x for x in self.stock_codes_yearly[self.stock_codes_idx] if x not in last_universe]
+                diff_universe = [x for x in self.stock_codes_yearly[self.stock_codes_idx] if x not in self.last_universe]
                 diff_universe_idx = 0
                 ret = []
-                for i, x in enumerate(self.universe):
+                for i, x in enumerate(self.last_universe):
                     if x not in self.stock_codes_yearly[self.stock_codes_idx]:
                         self.universe[i] = diff_universe[diff_universe_idx]
                         diff_universe_idx += 1

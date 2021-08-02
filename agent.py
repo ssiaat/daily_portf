@@ -87,9 +87,7 @@ class Agent:
         if tf.reduce_sum(self.num_stocks) > 0:
             curr_price = self.environment.get_price()
             if diff_stock_idx is not None:
-                t = self.environment.price_data.iloc[self.environment.idx + self.environment.num_steps - 2][self.environment.stock_codes_yearly[self.environment.stock_codes_idx-1]]
                 curr_price = self.environment.get_price_last_portf()
-                print(((curr_price-t)/t).max())
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
                 # 매도 수수료는 balance에 반영
