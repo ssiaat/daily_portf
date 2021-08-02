@@ -253,7 +253,7 @@ class ReinforcementLearner:
 
             # 에포크 종료 후 학습
             self.fit(self.agent.profitloss * tf.abs(self.agent.portfolio_ratio - self.agent.base_portfolio_ratio), discount_factor, full=True)
-            print(f'differ between port and cap: {self.agent.portfolio_ratio - self.environment.get_cap()}')
+            # print(f'differ between port and cap: {self.agent.portfolio_ratio - self.environment.get_cap()}')
 
             # 에포크 관련 정보 로그 기록
             num_epoches_digit = len(str(num_epoches))
