@@ -97,7 +97,7 @@ if __name__ == '__main__':
     # 리밸런싱 날짜마다 종목구하고 전체 종목 universe 계산
     stock_codes_yearly, stock_codes = get_stock_codes(num_stocks, rebalance_date)
     print(f'yearly: {num_stocks} total: {len(stock_codes)} stocks in universe')
-    price_data, cap_data, index_data, index_ppc, training_data = make_data(stock_codes, start_date, rebalance_date[-1], args.stationary)
+    price_data, cap_data, index_data, index_ppc, training_data = make_data(stock_codes, start_date, rebalance_date[-1], args.stationary, args.test)
 
     # 공통 파라미터 설정
     common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net,

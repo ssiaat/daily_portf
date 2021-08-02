@@ -46,14 +46,17 @@ def get_stock_codes(n, rebalance_date):
 
 # parameter 초기화를 he_normal
 # input의 범위도 비슷하게 맞춰줌
-def preprocessing(data):
+def preprocessing(data, start_idx, end_idx, test=False):
     if 'close' in data.columns:
         data['open'] = data['open'] / data['close'] - 1
         data['high'] = data['high'] / data['close'] - 1
         data['low'] = data['low'] / data['close'] - 1
     for col in data.columns:
-        max_num = data[col].max()
-        min_num = data[col].min()
+        max_num = data.iloc[start_idx:end_idx+1][col].max()
+        min_num = data.iloc[start_idx:end_idx+1][col].min()
+        if test:
+            max_num = data.iloc[:start_idx][col].max()
+            min_num = data.iloc[:start_idx][col].min()
         data[col] = (data[col] - min_num) / (max_num - min_num)
     return data
 
@@ -70,13 +73,13 @@ def get_weights_FFD(d, thres):
 w = get_weights_FFD(0.6, 1e-4)
 
 
-def make_data(stock_codes, start_date, end_date, stationary):
+def make_data(stock_codes, start_date, end_date, stationary, test):
     global indexes
     start_idx = list(indexes.index).index(start_date)
     if stationary:
         start_idx += len(w) - 1
     end_idx = list(indexes.index).index(end_date)
-    date_idx = list(indexes.index)[start_idx:end_idx+1]
+    date_idx = list(indexes.index)[start_idx:end_idx + 1]
 
     training_data_list = []
     training_data_idx = []
@@ -85,7 +88,7 @@ def make_data(stock_codes, start_date, end_date, stationary):
 
     for stock_code in tqdm(stock_codes):
         # From local db,. 한종목씩
-        price_data, cap_data, training_data = load_data_sql(stock_code, date_idx, stationary)
+        price_data, cap_data, training_data = load_data_sql(stock_code, date_idx, start_idx, end_idx, stationary, test)
         training_data_idx.append(stock_code)
         training_data_list.append(training_data)
         price_df = pd.concat([price_df, price_data], axis=1)
@@ -97,7 +100,7 @@ def make_data(stock_codes, start_date, end_date, stationary):
     training_df = training_df.swaplevel(0,1).sort_index(level=0)
 
     index_c = indexes.copy().ffill()
-    indexe_ppc = preprocessing(index_c)
+    indexe_ppc = preprocessing(index_c, start_idx, end_idx, test)
     if stationary:
         indexe_ppc = indexe_ppc.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
@@ -105,7 +108,7 @@ def make_data(stock_codes, start_date, end_date, stationary):
 
 
 # load_data_sql 한종목을 읽어오는것.
-def load_data_sql(fpath, date_idx, stationary):
+def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     # fpath는 stock_code 로 받음
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
     data = pd.read_sql(sql=sql, con=conn, parse_dates=True)
@@ -114,7 +117,7 @@ def load_data_sql(fpath, date_idx, stationary):
     data = data.set_index('date').loc[data_del_na.date]
 
     # 학습 데이터 분리, 전처리
-    training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA])
+    training_data = preprocessing(data.loc[date_idx].copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
     if stationary:
         training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
