@@ -21,10 +21,10 @@ class ReinforcementLearner:
     __metaclass__ = abc.ABCMeta
     lock = threading.Lock()
 
-    def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=True, net='dnn', test=False, sampling=False,
+    def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=True, net='dnn', test=False,
                 price_data=None, cap_data=None, index_data=None, index_ppc=None, training_data=None, num_steps=5,
                 hold_criter=0., delayed_reward_threshold=.05, num_ticker=100, num_features=7, num_index=5, lr=0.001,
-                value_network=None, policy_network=None, value_network_path=None, policy_network_path=None,
+                value_network_path=None, policy_network_path=None,
                 output_path='', reuse_models=True):
         # 인자 확인
         assert lr > 0
@@ -52,8 +52,11 @@ class ReinforcementLearner:
         
         # 신경망 설정
         self.lr = lr
-        self.value_network = value_network
-        self.policy_network = policy_network
+        self.value_network1 = None
+        self.value_network2 = None
+        self.target_value_network1 = None
+        self.value_network2 = None
+        self.policy_network = None
         self.reuse_models = reuse_models
 
         # 메모리
@@ -83,8 +86,6 @@ class ReinforcementLearner:
         # test시 연간 변화 종목
         self.diff_stocks_idx = None
 
-        self.sampling = sampling
-
     def init_value_network(self, activation='linear'):
         if self.net == 'dnn':
             self.value_network = DNN(input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
@@ -96,6 +97,18 @@ class ReinforcementLearner:
                                                activation=activation)
         if self.reuse_models and os.path.exists(self.value_network_path):
             print('reuse')
+            self.value_network.load_model(model_path=self.value_network_path)
+
+    def init_target_value_network(self, activation='linear'):
+        if self.net == 'dnn':
+            self.value_network = DNN(input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS * self.num_ticker,
+                                num_ticker=self.num_ticker, num_index=self.num_index, num_steps=self.num_steps, trainable=self.trainable,
+                                lr=self.lr, activation=activation)
+        elif self.net == 'lstm':
+            self.value_network = AttentionLSTM(input_dim=self.num_features, output_dim=self.agent.NUM_ACTIONS, num_ticker=self.num_ticker,
+                                               num_steps=self.num_steps, num_index=self.num_index, trainable=self.trainable, lr=self.lr,
+                                               activation=activation)
+        if self.reuse_models and os.path.exists(self.value_network_path):
             self.value_network.load_model(model_path=self.value_network_path)
 
     def init_policy_network(self, activation='linear'):
@@ -141,19 +154,11 @@ class ReinforcementLearner:
         return sample, idx
 
     @abc.abstractmethod
-    def get_batch(self, batch_size, delayed_reward, discount_factor):
-        pass
-
-    @abc.abstractmethod
-    def get_batch_sampling(self, batch_size, discount_factor):
+    def get_batch(self, batch_size, discount_factor):
         pass
 
     def update_networks(self, batch_size, delayed_reward, discount_factor):
-        # 배치 학습 데이터 생성
-        if not self.sampling:
-            x, y_value, y_policy = self.get_batch(batch_size, delayed_reward, discount_factor)
-        else:
-            x, y_value, y_policy = self.get_batch_sampling(batch_size, discount_factor)
+        x, y_value, y_policy = self.get_batch(batch_size, discount_factor)
 
         if len(x) > 0:
             value_loss = self.value_network.learn(x, y_value)
@@ -162,10 +167,7 @@ class ReinforcementLearner:
         return None, None
 
     def fit(self, delayed_reward, discount_factor, full=False):
-        if not self.sampling:
-            batch_size = len(self.memory_reward) - 2 if full else self.batch_size
-        else:
-            batch_size = 50 if full else 5
+        batch_size = 50 if full else 5
 
         # 배치 학습 데이터 생성 및 신경망 갱신
         if batch_size > 0:
@@ -250,18 +252,7 @@ class ReinforcementLearner:
                 self.batch_size += 1
                 self.itr_cnt += 1
 
-                # 지연 보상 발생된 경우 미니 배치 학습
-                if not self.sampling and tf.reduce_sum(delayed_reward) != 0:
-                    # 첫날에는 포트폴리오 존재하지 않는 것을 고려해서 batch size조정
-                    if self.batch_size == len(self.memory_sample_idx):
-                        if self.batch_size == 2:
-                            self.batch_size = 0
-                            continue
-                        self.batch_size -= 2
-                    self.fit(delayed_reward, discount_factor)
-                    print('{:,} {:.4f}' .format(self.agent.portfolio_value, (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
-
-                if self.sampling and self.itr_cnt % 10 == 0:
+                if self.itr_cnt % 10 == 0:
                     if self.itr_cnt == 10:
                         _ = self.memory_sample_idx.popleft()
                     self.fit(delayed_reward, discount_factor)
@@ -321,47 +312,17 @@ class ReinforcementLearner:
         if self.policy_network is not None and self.policy_network_path is not None:
             self.policy_network.save_model(policy_network_path)
 
+
 class A2CLearner(ReinforcementLearner):
     def __init__(self, *args, value_network_path=None, policy_network_path=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.value_network_path = value_network_path
         self.policy_network_path = policy_network_path
-        if self.value_network is None:
-            self.init_value_network()
-        if self.policy_network is None:
-            self.init_policy_network()
-        
-    def get_batch(self, batch_size, delayed_reward, discount_factor):
-        # 행동에 대한 보상은 다음날 알 수 있음
-        memory = zip(
-            reversed(self.memory_sample_idx[-batch_size-1:-1]),
-            reversed(self.memory_action[-batch_size-1:-1]),
-            reversed(self.memory_value[-batch_size-1:-1]),
-            reversed(self.memory_reward[-batch_size-1:-1]),
-        )
-        x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
-        x_index = np.zeros((batch_size, 1, 1, self.num_steps, self.num_index))
-        y_value = np.zeros((batch_size, self.num_ticker * self.agent.NUM_ACTIONS), dtype=np.float32)
-        y_policy = np.zeros((batch_size, self.num_ticker), dtype=np.float32)
-        value_max_next = np.zeros((self.num_ticker,))
-        reward_next = self.memory_reward[-1]
-        for i, (idx, action, value, reward) in enumerate(memory):
-            sample = self.environment.get_training_data(idx)
-            x[i] = self.environment.transform_sample(sample[0])
-            x_index[i] = np.array([sample[1]])
-            r = (delayed_reward + (reward_next - reward) * 2) * 100
-            y_value[i, action] = r + discount_factor * value_max_next
-            advantage = tf.nn.softmax(tf.gather(y_value[i], action) - tf.gather(value, action))
-            y_policy[i] = self.agent.set100(advantage)
-            value_max_next = tf.reduce_max(tf.reshape(value, (-1, 2)), axis=1)
-            reward_next = reward
+        self.init_value_network()
+        # self.init_target_value_network()
+        self.init_policy_network()
 
-        # input 형태로 변경
-        x = list(np.squeeze(x.swapaxes(0,1), axis=2))
-        x.append(*np.squeeze(x_index.swapaxes(0,1), axis=2))
-        return x, y_value, y_policy
-
-    def get_batch_sampling(self, batch_size, discount_factor):
+    def get_batch(self, batch_size, discount_factor):
         idx_batch = random.sample(list(itertools.islice(self.memory_sample_idx, 0, len(self.memory_sample_idx)-1)), batch_size)
         # 행동에 대한 보상은 다음날 알 수 있음
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))

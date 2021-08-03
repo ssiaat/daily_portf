@@ -138,7 +138,7 @@ class AttentionLSTM(Network):
         h_hat = self.mha(*qkv)
 
         hidden_h = Dense(self.hidden_size_lstm * 4, activation=self.activation, kernel_initializer=self.initializer)(h + h_hat)
-        hidden_h = Dropout(0.1, trainable=self.trainable)
+        hidden_h = Dropout(0.1, trainable=self.trainable)(hidden_h)
         hidden_h = Dense(self.hidden_size_lstm, activation=self.activation, kernel_initializer=self.initializer)(hidden_h)
         h_p = tf.math.tanh(h + h_hat + hidden_h)
 

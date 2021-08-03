@@ -14,7 +14,7 @@ os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Hyperparameters
-num_stocks = 200  # universe에 존재하는 종목수
+num_stocks = 10  # universe에 존재하는 종목수
 num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
 start_year = 2000 # 시작 연도
 end_year = 2015   # 종료 연도
@@ -38,7 +38,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--stationary', action='store_true')
-    parser.add_argument('--sampling', action='store_true')
     args = parser.parse_args()
 
     # Keras Backend 설정
@@ -105,7 +104,7 @@ if __name__ == '__main__':
     # 공통 파라미터 설정
     common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net,
                      'delayed_reward_threshold': delayed_reward_threshold, 'num_ticker': num_stocks, 'hold_criter': hold_criter,
-                     'num_steps':num_steps, 'lr': lr,  'reuse_models': reuse_models, 'test': args.test, 'sampling':args.sampling,
+                     'num_steps':num_steps, 'lr': lr,  'reuse_models': reuse_models, 'test': args.test,
                      'price_data': price_data, 'cap_data': cap_data, 'index_data' : index_data, 'index_ppc':index_ppc, 'training_data': training_data,
                      'output_path': output_path, 'value_network_path': value_network_path, 'policy_network_path': policy_network_path}
 
