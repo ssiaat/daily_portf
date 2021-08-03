@@ -103,7 +103,7 @@ class Agent:
 
         # 탐험 여부 결정
         exploration = [False] * self.num_ticker
-        if np.random.rand() < 0.5:
+        if epsilon > 0. and np.random.rand() < 0.5:
             exploration = np.random.random((self.num_ticker,)) < epsilon
             random_action = np.random.random((self.num_ticker,)) < 0.5
             action = np.where(exploration == 1, random_action, action)

@@ -145,7 +145,7 @@ class ReinforcementLearner:
         pass
 
     @abc.abstractmethod
-    def get_batch_sampling(self, discount_factor):
+    def get_batch_sampling(self, batch_size, discount_factor):
         pass
 
     def update_networks(self, batch_size, delayed_reward, discount_factor):
@@ -153,7 +153,7 @@ class ReinforcementLearner:
         if not self.sampling:
             x, y_value, y_policy = self.get_batch(batch_size, delayed_reward, discount_factor)
         else:
-            x, y_value, y_policy = self.get_batch_sampling(discount_factor)
+            x, y_value, y_policy = self.get_batch_sampling(batch_size, discount_factor)
 
         if len(x) > 0:
             value_loss = self.value_network.learn(x, y_value)
@@ -162,7 +162,10 @@ class ReinforcementLearner:
         return None, None
 
     def fit(self, delayed_reward, discount_factor, full=False):
-        batch_size = len(self.memory_reward) - 2 if full else self.batch_size
+        if not self.sampling:
+            batch_size = len(self.memory_reward) - 2 if full else self.batch_size
+        else:
+            batch_size = 50 if full else 5
 
         # 배치 학습 데이터 생성 및 신경망 갱신
         if batch_size > 0:
@@ -358,8 +361,7 @@ class A2CLearner(ReinforcementLearner):
         x.append(*np.squeeze(x_index.swapaxes(0,1), axis=2))
         return x, y_value, y_policy
 
-    def get_batch_sampling(self, discount_factor):
-        batch_size = 5
+    def get_batch_sampling(self, batch_size, discount_factor):
         idx_batch = random.sample(list(itertools.islice(self.memory_sample_idx, 0, len(self.memory_sample_idx)-1)), batch_size)
         # 행동에 대한 보상은 다음날 알 수 있음
         x = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))

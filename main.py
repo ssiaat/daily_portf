@@ -64,8 +64,10 @@ if __name__ == '__main__':
     if args.test == True:
         print('This running is for testing')
         num_epoches = 1
-        value_network_name = net + '_value'
-        policy_network_name = net + '_policy'
+        if value_network_name is None:
+            value_network_name = net + '_value'
+        if policy_network_name is None:
+            policy_network_name = net + '_policy'
         reuse_models = True
     else:
         print('This running is for training')
