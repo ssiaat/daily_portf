@@ -1,4 +1,4 @@
-import data_manager
+# import data_manager
 # import matplotlib.pyplot as plt
 import numpy as np
 

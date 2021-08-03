@@ -83,7 +83,7 @@ class DNN(Network):
         output = Concatenate()(output)
         # output = self.residual_layer(output, 256)
         # output = self.residual_layer(output, 128)
-        output = Dense(1024, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(output)
         output = tf.reshape(output, (-1, self.output_dim))

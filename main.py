@@ -38,6 +38,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--stationary', action='store_true')
+    parser.add_argument('--sampling', action='store_true')
     args = parser.parse_args()
 
     # Keras Backend 설정
@@ -102,7 +103,7 @@ if __name__ == '__main__':
     # 공통 파라미터 설정
     common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net,
                      'delayed_reward_threshold': delayed_reward_threshold, 'num_ticker': num_stocks, 'hold_criter': hold_criter,
-                     'num_steps':num_steps, 'lr': lr,  'reuse_models': reuse_models, 'test': args.test,
+                     'num_steps':num_steps, 'lr': lr,  'reuse_models': reuse_models, 'test': args.test, 'sampling':args.sampling,
                      'price_data': price_data, 'cap_data': cap_data, 'index_data' : index_data, 'index_ppc':index_ppc, 'training_data': training_data,
                      'output_path': output_path, 'value_network_path': value_network_path, 'policy_network_path': policy_network_path}
 
