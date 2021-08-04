@@ -95,7 +95,7 @@ class AttentionLSTM(Network):
             inp.append(Input(shape=(None, self.num_ticker)))
         sub_models = [self.mini_model() for _ in range(self.num_ticker + 1)]
         qkv_models = [self.qkv_model() for _ in range(3)]
-        mha = MultiHeadAttention(8, 8)
+        mha = MultiHeadAttention(4, 4)
         self.model = self.get_network(inp, sub_models, qkv_models, mha)
 
     # after expand input, calculate hidden state of input sequences
@@ -125,11 +125,11 @@ class AttentionLSTM(Network):
         inp_portf = None
         if self.value_flag:
             inp_portf = inp[-1]
-            inp = inp[:-1]
-        context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i,m in zip(inp, sub_models)]
+            context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp[:-1], sub_models)]
+        else:
+            context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp, sub_models)]
         context_vectors = [context_vectors[-1] + cv for cv in context_vectors[:-1]]
         h = Concatenate(axis=1)(context_vectors)
-
         # attention model
         qkv = [am(h) for am in qkv_models]
         h_hat = mha(*qkv)
@@ -139,9 +139,9 @@ class AttentionLSTM(Network):
         hidden_h = Dense(self.hidden_size_lstm, activation=self.activation, kernel_initializer=self.initializer)(hidden_h)
         h_p = tf.math.tanh(h + h_hat + hidden_h)
 
-        if self.value_flag:
-            output_portf = Dense(self.hidden_size_lstm, activation=self.activation_last, kernel_initializer=self.initializer)(inp_portf)
-            h_p = Concatenate(axis=1)([h_p, output_portf])
+        # if self.value_flag:
+        #     output_portf = Dense(self.hidden_size_lstm, activation=self.activation_last, kernel_initializer=self.initializer)(inp_portf)
+        #     h_p = Concatenate(axis=1)([h_p, output_portf])
         output = Dense(self.hidden_size_lstm * 2, activation=self.activation_last, kernel_initializer=self.initializer)(h_p)
 
         return Model(inp, output)
@@ -230,8 +230,10 @@ class q_network:
         s.append(a)
         output1 = self.network1.model(s)
         output1 = self.layer1(output1)
+        output1 = tf.reshape(output1, shape=(self.network1.num_steps, self.network1.num_ticker))
         output2 = self.network2.model(s)
         output2 = self.layer2(output2)
+        output2 = tf.reshape(output2, shape=(self.network1.num_steps, self.network1.num_ticker))
         return output1, output2
 
     def learn(self, s, a, backup):

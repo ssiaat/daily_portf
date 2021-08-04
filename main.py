@@ -14,13 +14,13 @@ os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Hyperparameters
-num_stocks = 200  # universe에 존재하는 종목수
+num_stocks = 10  # universe에 존재하는 종목수
 num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
 start_year = 2000 # 시작 연도
-end_year = 2005   # 종료 연도
+end_year = 2015   # 종료 연도
 
 lr = 0.001
-net = 'dnn'
+net = 'lstm'
 discount_factor = 0.9
 start_epsilon = 0.3
 balance = 1e9     # 초기 자본금
