@@ -14,7 +14,7 @@ os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Hyperparameters
-num_stocks = 10  # universe에 존재하는 종목수
+num_stocks = 200  # universe에 존재하는 종목수
 num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
 start_year = 2000 # 시작 연도
 end_year = 2015   # 종료 연도
@@ -24,7 +24,7 @@ net = 'dnn'
 discount_factor = 0.9
 start_epsilon = 0.3
 balance = 1e9     # 초기 자본금
-num_epoches = 30
+num_epoches = 20
 hold_criter = 0.  # 포트폴리오 변동 줄이기 위해 hold_criter이하면 보유
 delayed_reward_threshold = 0.02  # 학습이 이뤄지는 기준 수익률(이상, 이하면 학습 진행)
 
@@ -92,9 +92,11 @@ if __name__ == '__main__':
 
     # 포트폴리오 구성 ticker정하고 데이터 불러옴
     # 리밸런싱이 있는 기간에 리밸런싱을 할 날짜 계산
-    rebalance_date = set_rebalance_date(start_year, end_year)
+    rebalance_date = set_rebalance_date(start_year-1, end_year)
     if not args.test:
         rebalance_date = [rebalance_date[-1]]
+    else:
+        rebalance_date = rebalance_date[:-1]
 
     # 리밸런싱 날짜마다 종목구하고 전체 종목 universe 계산
     stock_codes_yearly, stock_codes = get_stock_codes(num_stocks, rebalance_date)

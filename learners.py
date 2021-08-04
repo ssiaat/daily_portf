@@ -44,7 +44,7 @@ class ReinforcementLearner:
         self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter, delayed_reward_threshold=delayed_reward_threshold)
 
         # 학습 데이터
-        self.total_len = len(training_data.index) / num_ticker  # 전체 학습 기간의 날짜 수
+        self.total_len = len(training_data.index) / len(stock_codes)  # 전체 학습 기간의 날짜 수
         self.num_ticker = num_ticker
         self.num_features = num_features
         self.num_index = num_index
