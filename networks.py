@@ -1,46 +1,37 @@
 import os
 import threading
-
+import numpy as np
 print(f'Keras Backend : {os.environ["KERAS_BACKEND"]}')
 
 from keras.models import Model, Sequential
-from keras.layers import Dense, BatchNormalization, Dropout, LSTM, LayerNormalization, Concatenate, MultiHeadAttention
-from tensorflow.keras.initializers import he_normal, glorot_normal
+from keras.layers import Dense, Dropout, LSTM, LayerNormalization, Concatenate, MultiHeadAttention
+from tensorflow.keras.initializers import glorot_uniform
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import mean_squared_error as mse
 from keras import Input
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 class Network:
     lock = threading.Lock()
 
-    def __init__(self, input_dim=0, output_dim=0, num_ticker=100, num_index=5, num_steps=5, trainable=False, lr=0.001, activation=None):
+    def __init__(self, input_dim=0, output_dim=0, num_ticker=100, num_index=5, num_steps=5, trainable=True, activation=None, value_flag='True'):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.num_ticker = num_ticker
         self.num_index = num_index
         self.num_steps = num_steps
         self.trainable = trainable
-        self.loss = mse
         self.model = None
-        self.initializer = glorot_normal()
+        self.initializer = glorot_uniform()
         self.activation = 'relu'
         self.activation_last = activation
-        lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer = Adam(lr_scheduler, clipnorm=.01)
-
-    def predict(self, sample):
-        with self.lock:
-            return tf.squeeze(self.model(sample))
-
-    def learn(self, x, y, flag=True):
-        with tf.GradientTape() as tape:
-            # 가치 신경망 갱신
-            output = self.model(x)
-            loss = tf.sqrt(self.loss(y, output))
-        gradients = tape.gradient(loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
-        return tf.reduce_mean(loss)
+        self.alpha = 0.2
+        self.value_flag = value_flag
+        if self.value_flag:
+            self.last_idx = -2
+        else:
+            self.last_idx = -1
 
     def save_model(self, model_path):
         if model_path is not None and self.model is not None:
@@ -53,11 +44,13 @@ class Network:
 class DNN(Network):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.sub_models = [self.mini_dnn() for _ in range(self.num_ticker + 1)]
-        # 마지막 input은 index
+        sub_models = [self.mini_dnn() for _ in range(self.num_ticker - self.last_idx)]
+        # 마지막 input은 policy : index, value: action
         inp = [Input(shape=(None, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input(shape=(None, self.num_index)))
-        self.model = self.get_network(inp)
+        if self.value_flag:
+            inp.append(Input(shape=(None, self.num_ticker)))
+        self.model = self.get_network(inp, sub_models)
 
     def residual_layer(self, inp, hidden_size):
         output_r = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(inp)
@@ -76,17 +69,15 @@ class DNN(Network):
         model.add(Dropout(0.1, trainable=self.trainable))
         return model
 
-    def get_network(self, inp):
-        # 마지막 input은 index
-        output = [m(tf.reshape(i, (-1, self.input_dim))) for i,m in zip(inp[:-1], self.sub_models[:-1])]
-        output.append(self.sub_models[-1](tf.reshape(inp[-1], (-1, self.num_index))))
+    def get_network(self, inp, sub_models):
+
+        output = [m(tf.reshape(i, (-1, self.input_dim))) for i,m in zip(inp[:self.last_idx], sub_models[:self.last_idx])]
+        output.append(sub_models[self.last_idx](tf.reshape(inp[self.last_idx], (-1, self.num_index))))
+        if self.value_flag:
+            output.append(sub_models[-1](tf.reshape(inp[-1], (-1, self.num_ticker))))
         output = Concatenate()(output)
-        # output = self.residual_layer(output, 256)
-        # output = self.residual_layer(output, 128)
         output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(output)
-        output = tf.reshape(output, (-1, self.output_dim))
         return Model(inp, output)
 
 # refer to paper DTML(jaemin yoo)
@@ -95,15 +86,17 @@ class AttentionLSTM(Network):
     def __init__(self, *args, num_steps=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_steps = num_steps
-        self.hidden_size_lstm = 256
+        self.hidden_size_lstm = 128
 
         # 마지막 input은 index
         inp = [Input((self.num_steps, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input((self.num_steps, self.num_index)))
-        self.sub_models = [self.mini_model() for _ in range(self.num_ticker + 1)]
-        self.qkv_models = [self.qkv_model() for _ in range(3)]
-        self.mha = MultiHeadAttention(8, 8)
-        self.model = self.get_network(inp)
+        if self.value_flag:
+            inp.append(Input(shape=(None, self.num_ticker)))
+        sub_models = [self.mini_model() for _ in range(self.num_ticker + 1)]
+        qkv_models = [self.qkv_model() for _ in range(3)]
+        mha = MultiHeadAttention(8, 8)
+        self.model = self.get_network(inp, sub_models, qkv_models, mha)
 
     # after expand input, calculate hidden state of input sequences
     def mini_model(self):
@@ -128,19 +121,134 @@ class AttentionLSTM(Network):
         model.add(Dense(self.hidden_size_lstm, activation='tanh', kernel_initializer=self.initializer))
         return model
 
-    def get_network(self, inp):
-        context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i,m in zip(inp, self.sub_models)]
+    def get_network(self, inp, sub_models, qkv_models, mha):
+        inp_portf = None
+        if self.value_flag:
+            inp_portf = inp[-1]
+            inp = inp[:-1]
+        context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i,m in zip(inp, sub_models)]
         context_vectors = [context_vectors[-1] + cv for cv in context_vectors[:-1]]
         h = Concatenate(axis=1)(context_vectors)
 
         # attention model
-        qkv = [am(h) for am in self.qkv_models]
-        h_hat = self.mha(*qkv)
+        qkv = [am(h) for am in qkv_models]
+        h_hat = mha(*qkv)
 
         hidden_h = Dense(self.hidden_size_lstm * 4, activation=self.activation, kernel_initializer=self.initializer)(h + h_hat)
         hidden_h = Dropout(0.1, trainable=self.trainable)(hidden_h)
         hidden_h = Dense(self.hidden_size_lstm, activation=self.activation, kernel_initializer=self.initializer)(hidden_h)
         h_p = tf.math.tanh(h + h_hat + hidden_h)
 
-        output = Dense(self.output_dim, activation=self.activation_last, kernel_initializer=self.initializer)(h_p)
-        return Model(inp, tf.reshape(output, (-1, self.output_dim * self.num_ticker)))
+        if self.value_flag:
+            output_portf = Dense(self.hidden_size_lstm, activation=self.activation_last, kernel_initializer=self.initializer)(inp_portf)
+            h_p = Concatenate(axis=1)([h_p, output_portf])
+        output = Dense(self.hidden_size_lstm * 2, activation=self.activation_last, kernel_initializer=self.initializer)(h_p)
+
+        return Model(inp, output)
+
+LOG_STD_MIN = -20
+LOG_STD_MAX = 2
+EPS = 1e-8
+class pi_network:
+    def __init__(self, net='dnn', lr=0.001, *args, **kargs):
+        if net == 'dnn':
+            self.network = DNN(*args, **kargs)
+        else:
+            self.network = AttentionLSTM(*args, **kargs)
+        lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
+        self.optimizer = Adam(lr_scheduler, clipnorm=.01)
+        self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
+        self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
+
+    def predict(self, x, deterministic=False, with_logprob=True, learn=True):
+        output = self.network.model(x)
+        mu = tf.reshape(self.mu_layer(output), (-1, self.network.num_ticker))
+        log_std = tf.reshape(self.log_std_layer(output), (-1, self.network.num_ticker))
+        log_std = tf.clip_by_value(log_std, LOG_STD_MIN, LOG_STD_MAX)
+        if not learn:
+            mu = tf.squeeze(mu)
+            log_std = tf.squeeze(log_std)
+        std = tf.math.exp(log_std)
+
+        if deterministic:
+            pi_action = mu
+        else:
+            pi_action = mu + tf.random.normal(tf.shape(mu)) * std
+
+        pi_distribution = tfp.distributions.Normal(mu, std)
+        if with_logprob:
+            log_prob_pi = pi_distribution.log_prob(pi_action)
+            log_prob_pi -= (2*(np.log(2) - pi_action - tf.math.softplus(-2*pi_action)))
+        else:
+            log_prob_pi = None
+
+        return pi_action, log_prob_pi
+
+    def learn(self, x, y):
+        with tf.GradientTape() as tape:
+            # 가치 신경망 갱신
+            output, entropy = self.predict(x, with_logprob=True)
+            loss = self.network.alpha * entropy - y
+        gradients = tape.gradient(loss, self.network.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.network.model.trainable_variables))
+        return tf.reduce_mean(loss)
+
+    def act(self, x):
+        a, _ = self.predict(x, False, False)
+        return a
+
+    def save_model(self, model_path):
+        self.network.save_model(model_path)
+
+    def load_model(self, model_path):
+        self.network.load_model(model_path)
+
+class q_network:
+    def __init__(self, net='dnn', lr=0.001, *args, **kargs):
+        if net == 'dnn':
+            self.network1 = DNN(*args, **kargs)
+            self.network2 = DNN(*args, **kargs)
+        else:
+            self.network1 = AttentionLSTM(*args, **kargs)
+            self.network2 = AttentionLSTM(*args, **kargs)
+        self.layer1 = Dense(self.network1.output_dim, activation=self.network1.activation_last,
+                            kernel_initializer=self.network1.initializer)
+        self.layer2 = Dense(self.network2.output_dim, activation=self.network2.activation_last,
+                            kernel_initializer=self.network2.initializer)
+        self.loss = mse
+        lr_scheduler1 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
+        self.optimizer1 = Adam(lr_scheduler1, clipnorm=.01)
+        lr_scheduler2 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
+        self.optimizer2 = Adam(lr_scheduler2, clipnorm=.01)
+
+    def predict(self, s, a):
+        s.append(a)
+        output1 = self.network1.model(s)
+        output1 = self.layer1(output1)
+        output2 = self.network2.model(s)
+        output2 = self.layer2(output2)
+        return output1, output2
+
+    def learn(self, s, a, y):
+        with tf.GradientTape() as tape:
+            # 가치 신경망 갱신
+            output1, output2 = self.predict(s, a)
+            loss = tf.sqrt(self.loss(y, output1))
+            loss += tf.sqrt(self.loss(y, output2))
+        gradients1 = tape.gradient(loss, self.network1.model.trainable_variables)
+        self.optimizer1.apply_gradients(zip(gradients1, self.network1.model.trainable_variables))
+        gradients2 = tape.gradient(loss, self.network2.model.trainable_variables)
+        self.optimizer2.apply_gradients(zip(gradients2, self.network2.model.trainable_variables))
+        return tf.reduce_mean(loss)
+
+    def save_model(self, model_path):
+        self.network1.save_model(model_path[0])
+        self.network2.save_model(model_path[1])
+
+    def load_model(self, model_path):
+        self.network1.load_model(model_path[0])
+        self.network2.save_model(model_path[1])
+
+
+
+

@@ -33,11 +33,11 @@ class Agent:
         self.balance = 0  # 현재 현금 잔고
         self.num_stocks = np.zeros((self.num_ticker,))  # 보유 주식 수
         self.portfolio_ratio = np.zeros((self.num_ticker,))
-        self.base_portfolio_ratio = np.zeros((self.num_ticker,))
+        self.last_portfolio_ratio = np.zeros((self.num_ticker,))
 
         # 포트폴리오 가치: balance + num_stocks * {현재 주식 가격}
         self.portfolio_value = 0 
-        self.base_portfolio_value = 0  # 직전 학습 시점의 PV
+        self.last_portfolio_value = 0  # 직전 학습 시점의 PV
         # 종목마다 포트폴리오 가치 (balance고려 안됨)
         self.portfolio_value_each = np.zeros((self.num_ticker,))
 
@@ -56,8 +56,8 @@ class Agent:
         self.portfolio_ratio = np.zeros((self.num_ticker,))
         self.portfolio_value = self.initial_balance
         self.portfolio_value_each = np.zeros((self.num_ticker,))
-        self.base_portfolio_ratio = np.zeros((self.num_ticker,))
-        self.base_portfolio_value = self.initial_balance
+        self.last_portfolio_ratio = np.zeros((self.num_ticker,))
+        self.last_portfolio_value = self.initial_balance
 
         self.num_buy = np.zeros((self.num_ticker,))
         self.num_sell = np.zeros((self.num_ticker,))
@@ -80,7 +80,8 @@ class Agent:
         curr_cap = self.environment.get_cap()
         curr_price = self.environment.get_price()
         curr_cap = self.set100(tf.where(curr_price == 0., 0., curr_cap))
-        ratio = self.set100(tf.clip_by_value(ratio, curr_cap - self.OVER_CAP[1], curr_cap + self.OVER_CAP[0]))
+        ratio = tf.clip_by_value(ratio, curr_cap - self.OVER_CAP[1], curr_cap + self.OVER_CAP[0])
+        ratio = self.set100(tf.clip_by_value(ratio, 0, 100))
         return ratio
 
     def renewal_portfolio_ratio(self, transaction, buy_value_each=None, diff_stock_idx=None):
@@ -125,7 +126,7 @@ class Agent:
         self.num_sell += np.where(action==self.ACTION_SELL, 1, 0)
         self.num_hold += np.where(action == self.ACTION_HOLD, 1, 0)
 
-        return action, ratio, exploration
+        return ratio, exploration
 
     def decide_trading_unit(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()
@@ -163,26 +164,14 @@ class Agent:
         # ks200 대비 수익률로 보상 결정
         ks_now = self.environment.get_ks()
         ks_ret = (ks_now - self.base_ks) / self.base_ks
-        self.profitloss = ((self.portfolio_value - self.base_portfolio_value) / self.base_portfolio_value) - ks_ret
+        self.profitloss = ((self.portfolio_value - self.last_portfolio_value) / self.last_portfolio_value) - ks_ret
 
         if self.profitloss > 0:
             self.win_cnt += 1
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
-        self.immediate_reward = self.profitloss * tf.abs(self.portfolio_ratio - self.base_portfolio_ratio)
-
-        # 지연 보상 - 익절, 손절 기준
-        delayed_reward = 0
-        if self.profitloss > self.delayed_reward_threshold or self.profitloss < -self.delayed_reward_threshold / 2:
-            # 목표 수익률 달성하여 기준 포트폴리오 가치 갱신
-            # 또는 손실 기준치를 초과하여 기준 포트폴리오 가치 갱신
-            self.base_portfolio_ratio = self.portfolio_ratio
-            self.base_portfolio_value = self.portfolio_value
-            self.base_ks = ks_now
-            delayed_reward = self.immediate_reward
-        else:
-            delayed_reward = np.zeros((self.num_ticker,), dtype='float')
-        return self.immediate_reward, delayed_reward
+        self.immediate_reward = self.profitloss * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio)
+        return self.immediate_reward
 
     def act(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()
@@ -200,6 +189,9 @@ class Agent:
         buy_value = tf.cast(tf.reduce_sum(buy_value_each), dtype=tf.float32)
         sell_value = tf.cast(tf.reduce_sum(sell_value_each) * (1 - self.TRADING_TAX[1]), dtype=tf.float32)
         self.balance = sell_value + self.balance - buy_value
+
+        self.last_portfolio_value = self.portfolio_value
+        self.last_portfolio_ratio = self.portfolio_ratio
 
         # 포트폴리오 가치 갱신, 거래세 반영
         self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)
