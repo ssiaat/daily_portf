@@ -7,7 +7,7 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = [0.01, 0.01]
+    OVER_CAP = [0.03, 0.03]
 
     # 행동
     ACTION_BUY = 0  # 매수
@@ -45,7 +45,8 @@ class Agent:
         self.num_sell = np.zeros((self.num_ticker,))  # 매도 횟수
         self.num_hold = np.zeros((self.num_ticker,))  # 홀딩 횟수
         self.immediate_reward = 0  # 즉시 보상
-        self.profitloss = 0  # 현재 손익
+        self.profitloss = 0
+        self.last_profitloss = 0
 
         self.base_ks = self.environment.get_ks_to_reset()  # 기준 시점의 ks200지수, 초기값은 첫 ks200지수
         self.win_cnt = 0
@@ -58,6 +59,7 @@ class Agent:
         self.portfolio_value_each = np.zeros((self.num_ticker,))
         self.last_portfolio_ratio = np.zeros((self.num_ticker,))
         self.last_portfolio_value = self.initial_balance
+        self.last_profitloss = 0
 
         self.num_buy = np.zeros((self.num_ticker,))
         self.num_sell = np.zeros((self.num_ticker,))
@@ -170,7 +172,7 @@ class Agent:
             self.win_cnt += 1
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
-        self.immediate_reward = self.profitloss * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio)
+        self.immediate_reward = (self.profitloss - self.last_profitloss) * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio)
         return self.immediate_reward
 
     def act(self, ratio, diff_stocks_idx=None):
@@ -192,6 +194,7 @@ class Agent:
 
         self.last_portfolio_value = self.portfolio_value
         self.last_portfolio_ratio = self.portfolio_ratio
+        self.last_profitloss = self.profitloss
 
         # 포트폴리오 가치 갱신, 거래세 반영
         self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)

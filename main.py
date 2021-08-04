@@ -30,6 +30,8 @@ delayed_reward_threshold = 0.02  # 학습이 이뤄지는 기준 수익률(이�
 
 value_network1_name = None
 value_network2_name = None
+target_value_network1_name = None
+target_value_network2_name = None
 policy_network_name = None
 output_name = utils.get_time_str()
 reuse_models = False
@@ -66,8 +68,11 @@ if __name__ == '__main__':
         num_epoches = 1
         if value_network1_name is None:
             value_network1_name = net + '_v1'
-            value_network2_name = net + 'v2'
-            policy_network_name = net + '_policy'
+            value_network2_name = net + '_v2'
+            target_value_network1_name = net + '_tv1'
+            target_value_network2_name = net + '_tv2'
+            policy_network_name = net + '_p'
+
         reuse_models = True
     else:
         print('This running is for training')
@@ -85,11 +90,15 @@ if __name__ == '__main__':
     if value_network1_name is not None:
         value_network1_path = os.path.join(settings.BASE_DIR, 'models/{}.h5'.format(value_network1_name))
         value_network2_path = os.path.join(settings.BASE_DIR, 'models/{}.h5'.format(value_network2_name))
+        target_value_network1_path = os.path.join(settings.BASE_DIR, 'models/{}.h5'.format(target_value_network1_name))
+        target_value_network2_path = os.path.join(settings.BASE_DIR, 'models/{}.h5'.format(target_value_network2_name))
         policy_network_path = os.path.join(settings.BASE_DIR, 'models/{}.h5'.format(policy_network_name))
     else:
         value_network1_path = os.path.join(output_path, '{}_v1.h5'.format(output_name))
         value_network2_path = os.path.join(output_path, '{}_v2.h5'.format(output_name))
-        policy_network_path = os.path.join(output_path, '{}_policy.h5'.format(output_name))
+        target_value_network1_path = os.path.join(output_path, '{}_tv1.h5'.format(output_name))
+        target_value_network2_path = os.path.join(output_path, '{}_tv2.h5'.format(output_name))
+        policy_network_path = os.path.join(output_path, '{}_p.h5'.format(output_name))
 
     # 포트폴리오 구성 ticker정하고 데이터 불러옴
     # 리밸런싱이 있는 기간에 리밸런싱을 할 날짜 계산
@@ -108,9 +117,10 @@ if __name__ == '__main__':
     common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net,
                      'delayed_reward_threshold': delayed_reward_threshold, 'num_ticker': num_stocks, 'hold_criter': hold_criter, 'num_steps':num_steps, 'lr': lr, 'test': args.test,
                      'price_data': price_data, 'cap_data': cap_data, 'index_data' : index_data, 'index_ppc':index_ppc, 'training_data': training_data, 'reuse_models': reuse_models,
-                     'output_path': output_path, 'value_network1_path': value_network1_path, 'value_network2_path':value_network2_path, 'policy_network_path': policy_network_path}
+                     'output_path': output_path, 'value_network1_path': value_network1_path, 'value_network2_path':value_network2_path, 'target_value_network1_path': target_value_network1_path,
+                     'target_value_network2_path': target_value_network2_path, 'policy_network_path': policy_network_path}
 
     learner = A2CLearner(**{**common_params})
     if learner is not None:
-        learner.run(balance=balance, num_epoches=num_epoches, discount_factor=discount_factor, start_epsilon=start_epsilon)
+        learner.run(balance=balance, num_epoches=num_epoches, start_epsilon=start_epsilon)
         learner.save_models()

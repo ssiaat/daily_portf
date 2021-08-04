@@ -15,7 +15,8 @@ import tensorflow_probability as tfp
 class Network:
     lock = threading.Lock()
 
-    def __init__(self, input_dim=0, output_dim=0, num_ticker=100, num_index=5, num_steps=5, trainable=True, activation=None, value_flag='True'):
+    def __init__(self, input_dim=0, output_dim=0, num_ticker=100, num_index=5, num_steps=5, trainable=True,
+                 activation=None, value_flag='True'):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.num_ticker = num_ticker
@@ -26,7 +27,6 @@ class Network:
         self.initializer = glorot_uniform()
         self.activation = 'relu'
         self.activation_last = activation
-        self.alpha = 0.2
         self.value_flag = value_flag
         if self.value_flag:
             self.last_idx = -2
@@ -150,17 +150,21 @@ LOG_STD_MIN = -20
 LOG_STD_MAX = 2
 EPS = 1e-8
 class pi_network:
-    def __init__(self, net='dnn', lr=0.001, *args, **kargs):
+    def __init__(self, net='dnn', lr=0.001, alpha=0.2, *args, **kargs):
         if net == 'dnn':
             self.network = DNN(*args, **kargs)
         else:
             self.network = AttentionLSTM(*args, **kargs)
+
+        self.alpha = alpha
+        self.discount_factor = 0.9
         lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
         self.optimizer = Adam(lr_scheduler, clipnorm=.01)
         self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
         self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
-    def predict(self, x, deterministic=False, with_logprob=True, learn=True):
+
+    def predict(self, x, deterministic=False, learn=True):
         output = self.network.model(x)
         mu = tf.reshape(self.mu_layer(output), (-1, self.network.num_ticker))
         log_std = tf.reshape(self.log_std_layer(output), (-1, self.network.num_ticker))
@@ -176,22 +180,23 @@ class pi_network:
             pi_action = mu + tf.random.normal(tf.shape(mu)) * std
 
         pi_distribution = tfp.distributions.Normal(mu, std)
-        if with_logprob:
-            log_prob_pi = pi_distribution.log_prob(pi_action)
-            log_prob_pi -= (2*(np.log(2) - pi_action - tf.math.softplus(-2*pi_action)))
-        else:
-            log_prob_pi = None
+        log_prob_pi = pi_distribution.log_prob(pi_action)
+        log_prob_pi -= (2*(np.log(2) - pi_action - tf.math.softplus(-2*pi_action)))
 
         return pi_action, log_prob_pi
 
-    def learn(self, x, y):
+
+    def learn(self, s, value_network):
         with tf.GradientTape() as tape:
-            # 가치 신경망 갱신
-            output, entropy = self.predict(x, with_logprob=True)
-            loss = self.network.alpha * entropy - y
-        gradients = tape.gradient(loss, self.network.model.trainable_variables)
+            pi, logp_pi = self.predict(s)
+            # pi 업데이트라 q_net gradient off
+            q1_pi, q2_pi = tf.stop_gradient(value_network.predict(s, pi))
+            q_pi = tf.math.minimum(q1_pi, q2_pi)
+            loss_pi = tf.reduce_mean(self.alpha * logp_pi - q_pi, axis=1)
+        gradients = tape.gradient(loss_pi, self.network.model.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.network.model.trainable_variables))
-        return tf.reduce_mean(loss)
+        return tf.reduce_mean(loss_pi)
+
 
     def act(self, x):
         a, _ = self.predict(x, False, False)
@@ -229,17 +234,17 @@ class q_network:
         output2 = self.layer2(output2)
         return output1, output2
 
-    def learn(self, s, a, y):
-        with tf.GradientTape() as tape:
-            # 가치 신경망 갱신
-            output1, output2 = self.predict(s, a)
-            loss = tf.sqrt(self.loss(y, output1))
-            loss += tf.sqrt(self.loss(y, output2))
-        gradients1 = tape.gradient(loss, self.network1.model.trainable_variables)
+    def learn(self, s, a, backup):
+        with tf.GradientTape() as tape_q, tf.GradientTape() as tape_pi:
+            q1, q2 = self.predict(s, a)
+            loss_q1 = tf.math.sqrt(self.loss(backup, q1))
+            loss_q2 = tf.math.sqrt(self.loss(backup, q2))
+
+        gradients1 = tape_q.gradient(loss_q1, self.network1.model.trainable_variables)
         self.optimizer1.apply_gradients(zip(gradients1, self.network1.model.trainable_variables))
-        gradients2 = tape.gradient(loss, self.network2.model.trainable_variables)
+        gradients2 = tape_pi.gradient(loss_q2, self.network2.model.trainable_variables)
         self.optimizer2.apply_gradients(zip(gradients2, self.network2.model.trainable_variables))
-        return tf.reduce_mean(loss)
+        return tf.reduce_mean(loss_q1 + loss_q2)
 
     def save_model(self, model_path):
         self.network1.save_model(model_path[0])
