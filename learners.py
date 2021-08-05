@@ -22,9 +22,9 @@ class ReinforcementLearner:
 
     def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=True, net='dnn', test=False,
                 price_data=None, cap_data=None, index_data=None, index_ppc=None, training_data=None, num_steps=5,
-                hold_criter=0., delayed_reward_threshold=.05, num_ticker=100, num_features=7, num_index=5, lr=0.001,
-                value_network1_path=None, value_network2_path=None, target_value_network1_path=None, target_value_network2_path=None,
-                policy_network_path=None, output_path='', reuse_models=True):
+                hold_criter=0., num_ticker=100, num_features=7, num_index=5, lr=0.001,
+                value_network1_path=None, value_network2_path=None, target_value_network1_path=None,
+                target_value_network2_path=None, policy_network_path=None, output_path='', reuse_models=True):
         # 인자 확인
         assert lr > 0
 
@@ -42,7 +42,7 @@ class ReinforcementLearner:
         self.ks_ret = ((index_data.ks200.iloc[-1] - index_data.ks200.iloc[0]) / index_data.ks200.iloc[0])
 
         # 에이전트 설정
-        self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter, delayed_reward_threshold=delayed_reward_threshold)
+        self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter)
 
         # 학습 데이터
         self.total_len = len(training_data.index) / len(stock_codes)  # 전체 학습 기간의 날짜 수
@@ -82,9 +82,6 @@ class ReinforcementLearner:
         self.policy_network_path = policy_network_path
         self.output_path = output_path
 
-        # action 조정 ([0,1,0,0,1] => [0,3,4,6,9]
-        self.modify_action_idx = np.array([i*2 for i in range(self.num_ticker)])
-
         # test시 연간 변화 종목
         self.diff_stocks_idx = None
 
@@ -93,11 +90,12 @@ class ReinforcementLearner:
         self.discount_factor = 0.9  # 할인율
         self.deterministic = True if self.test else False
         self.polyak = 0.95
+        self.batch_size = 5
 
     def init_value_network(self, activation='linear'):
         self.value_network = q_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                         num_ticker=self.num_ticker, num_index=self.num_index, num_steps=self.num_steps,
-                                        trainable=self.trainable, activation=activation, value_flag=True)
+                                        batch_size=self.batch_size, trainable=self.trainable, activation=activation, value_flag=True)
         if self.reuse_models and os.path.exists(self.value_network1_path):
             print('reuse')
             self.value_network.load_model(model_path=[self.value_network1_path, self.value_network2_path])
@@ -106,7 +104,7 @@ class ReinforcementLearner:
     def init_target_value_network(self, activation='linear'):
         self.target_value_network = q_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                             num_ticker=self.num_ticker, num_index=self.num_index, num_steps=self.num_steps,
-                                            trainable=self.trainable, activation=activation, value_flag=True)
+                                            batch_size=self.batch_size, trainable=self.trainable, activation=activation, value_flag=True)
         self.target_value_network.network1.model.set_weights(self.value_network.network1.model.get_weights())
         self.target_value_network.network2.model.set_weights(self.value_network.network2.model.get_weights())
         if self.reuse_models and os.path.exists(self.value_network1_path):
@@ -114,7 +112,6 @@ class ReinforcementLearner:
 
 
     def init_policy_network(self, activation='linear'):
-        output_dim = 1 if self.net == 'lstm' else self.num_ticker
         self.policy_network = pi_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                          num_ticker=self.num_ticker, num_steps=self.num_steps, num_index=self.num_index,
                                          trainable=self.trainable, activation=activation, value_flag=False, alpha=self.alpha)
@@ -151,16 +148,15 @@ class ReinforcementLearner:
         return sample, idx
 
     @abc.abstractmethod
-    def get_batch(self, batch_size, finished):
+    def get_batch(self, finished):
         pass
 
     @abc.abstractmethod
     def calculate_yvalue(self, r, next_s, d):
         pass
 
-    def update_networks(self, batch_size, finished=False):
-        s, a, r, next_s, d = self.get_batch(batch_size, finished)
-
+    def update_networks(self, finished=False):
+        s, a, r, next_s, d = self.get_batch(finished)
         # q loss
         backup = self.calculate_yvalue(r, next_s, d)
         value_loss = self.value_network.learn(s.copy(), a, backup)
@@ -179,19 +175,16 @@ class ReinforcementLearner:
             self.target_value_network.network2.model.trainable_variables[i].assign(q_targ)
 
     def fit(self,finished=False):
-        batch_size = 5
-
         # 배치 학습 데이터 생성 및 신경망 갱신
-        if batch_size > 0:
-            value_loss, policy_loss = self.update_networks(batch_size, finished)
-            self.value_loss += value_loss
-            self.policy_loss += policy_loss
-            self.learning_cnt += 1
+        value_loss, policy_loss = self.update_networks(finished)
+        self.value_loss += value_loss
+        self.policy_loss += policy_loss
+        self.learning_cnt += 1
 
         # target 신경망 갱신
         self.update_target_networks()
 
-    def run(self, num_epoches=100, balance=10000000, start_epsilon=0.5):
+    def run(self, num_epoches=100, balance=10000000):
         info = "RL:a2c LR:{lr}".format(lr=self.lr)
         with self.lock:
             logging.info(info)
@@ -214,14 +207,7 @@ class ReinforcementLearner:
             # 환경, 에이전트, 신경망, 가시화, 메모리 초기화
             self.reset()
 
-            # 학습을 진행할 수록 탐험 비율 감소
-            if not self.test:
-                epsilon = start_epsilon  * (1. - float(epoch) / (num_epoches - 1))
-            else:
-                epsilon = 0
-
             while True:
-
                 # 샘플 생성, sample = [sample, sample of index]
                 sample, idx = self.build_sample()
                 if sample is None:
@@ -229,7 +215,6 @@ class ReinforcementLearner:
                 next_sample = self.environment.transform_sample(sample[0])
                 next_sample.append(np.array([sample[1]]))
 
-                curr_cap = self.environment.get_cap()
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pi, logp_pi = self.policy_network.predict(next_sample, self.deterministic, learn=False)
                 pi = self.agent.similar_with_cap(pi)
@@ -241,7 +226,7 @@ class ReinforcementLearner:
                 immediate_reward = self.agent.get_reward()
                 
                 # 신경망 또는 탐험에 의한 행동 결정
-                ratio, exploration = self.agent.decide_action(pi, epsilon)
+                ratio = self.agent.decide_action(pi)
                 action = ratio - self.agent.portfolio_ratio
 
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
@@ -283,9 +268,9 @@ class ReinforcementLearner:
                 self.value_loss /= self.learning_cnt
                 self.policy_loss /= self.learning_cnt
             pv_ret = (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance
-            logging.info("[Epoch {}/{}] Epsilon:{:.4f} PV:{:,.0f} PVReturn: {:.4f}/{:.4f}"
+            logging.info("[Epoch {}/{}] PV:{:,.0f} PVReturn: {:.4f}/{:.4f}"
                 " Win:{}/{} LC:{} ValueLoss:{:.6f} PolicyLoss:{:.6f} ET:{:.4f}".format(
-                    epoch_str, num_epoches, epsilon, self.agent.portfolio_value,
+                    epoch_str, num_epoches, self.agent.portfolio_value,
                     pv_ret, self.ks_ret, self.agent.win_cnt, self.total_len,
                     self.learning_cnt, self.value_loss, self.policy_loss, elapsed_time_epoch))
 
@@ -328,21 +313,21 @@ class A2CLearner(ReinforcementLearner):
         self.init_target_value_network()
         self.init_policy_network()
 
-    def get_batch(self, batch_size, finished=False):
-        idx_batch = random.sample(list(itertools.islice(self.memory_sample_idx, 0, len(self.memory_sample_idx)-1)), batch_size)
+    def get_batch(self, finished=False):
+        idx_batch = random.sample(list(itertools.islice(self.memory_sample_idx, 0, len(self.memory_sample_idx)-1)), self.batch_size)
         # 행동에 대한 보상은 다음날 알 수 있음
-        s = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
-        s_index = np.zeros((batch_size, 1, 1, self.num_steps, self.num_index))
-        next_s = np.zeros((batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
-        next_s_index = np.zeros((batch_size, 1, 1, self.num_steps, self.num_index))
-        action = np.zeros((batch_size, self.num_steps, self.num_ticker))
-        reward = np.zeros((batch_size, self.num_ticker))
-        d = np.zeros((batch_size, 1))
+        s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
+        s_index = np.zeros((self.batch_size, 1, 1, self.num_steps, self.num_index))
+        next_s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
+        next_s_index = np.zeros((self.batch_size, 1, 1, self.num_steps, self.num_index))
+        action = np.zeros((self.batch_size, self.num_ticker))
+        reward = np.zeros((self.batch_size, self.num_ticker))
+        d = np.zeros((self.batch_size, 1))
         for i, idx in enumerate(idx_batch):
             sample = self.environment.get_training_data(idx)
             s[i] = self.environment.transform_sample(sample[0])
             s_index[i] = np.array([sample[1]])
-            action[i] = np.array([self.memory_action[idx]])
+            action[i] = np.array(self.memory_action[idx])
             reward[i] = self.memory_reward[idx+1] * 100
             if idx == len(self.price_data) - 1:
                 d[i] = 1
@@ -357,7 +342,7 @@ class A2CLearner(ReinforcementLearner):
 
     def calculate_yvalue(self, r, next_s, d):
         a2, logp_a2 = self.policy_network.predict(next_s)
-        q1_pi_targ, q2_pi_targ = self.value_network.predict(next_s, a2)
+        q1_pi_targ, q2_pi_targ = self.value_network.predict(next_s.copy(), a2)
         q_pi_targ = tf.math.minimum(q1_pi_targ, q2_pi_targ)
         backup = r + self.discount_factor * (1 - d) * (q_pi_targ - self.alpha * logp_a2)
         return backup

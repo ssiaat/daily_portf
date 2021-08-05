@@ -99,22 +99,10 @@ class Agent:
             self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
 
 
-    def decide_action(self, ratio, epsilon):
+    def decide_action(self, ratio):
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
         diff = abs(ratio - self.portfolio_ratio)
         action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
-
-        # 탐험 여부 결정
-        exploration = [False] * self.num_ticker
-        if epsilon > 0. and np.random.rand() < 0.5:
-            exploration = np.random.random((self.num_ticker,)) < epsilon
-            random_action = np.random.random((self.num_ticker,)) < 0.5
-            action = np.where(exploration == 1, random_action, action)
-
-            # 매도 탐험의 하한선은 보유 비중 전체, 1은 명목상 존재
-            ratio = np.clip(np.where((action == 1) & (exploration == 1), self.portfolio_ratio - diff, ratio), 0, 1)
-            ratio = np.where((action == 0) & (exploration == 1), self.portfolio_ratio + diff, ratio)
-            ratio = self.set100(ratio)
 
         # hold 여부 결정
         if self.hold_criter > 0.:
@@ -128,7 +116,7 @@ class Agent:
         self.num_sell += np.where(action==self.ACTION_SELL, 1, 0)
         self.num_hold += np.where(action == self.ACTION_HOLD, 1, 0)
 
-        return ratio, exploration
+        return ratio
 
     def decide_trading_unit(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()
@@ -166,7 +154,7 @@ class Agent:
         # ks200 대비 수익률로 보상 결정
         ks_now = self.environment.get_ks()
         ks_ret = (ks_now - self.base_ks) / self.base_ks
-        self.profitloss = ((self.portfolio_value - self.last_portfolio_value) / self.last_portfolio_value) - ks_ret
+        self.profitloss = ((self.portfolio_value - self.initial_balance) / self.initial_balance) - ks_ret
 
         if self.profitloss > 0:
             self.win_cnt += 1

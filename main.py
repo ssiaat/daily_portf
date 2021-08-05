@@ -20,13 +20,11 @@ start_year = 2000 # 시작 연도
 end_year = 2015   # 종료 연도
 
 lr = 0.001
-net = 'lstm'
+net = 'dnn'
 discount_factor = 0.9
-start_epsilon = 0.3
 balance = 1e9     # 초기 자본금
 num_epoches = 20
 hold_criter = 0.  # 포트폴리오 변동 줄이기 위해 hold_criter이하면 보유
-delayed_reward_threshold = 0.02  # 학습이 이뤄지는 기준 수익률(이상, 이하면 학습 진행)
 
 value_network1_name = None
 value_network2_name = None
@@ -115,12 +113,12 @@ if __name__ == '__main__':
 
     # 공통 파라미터 설정
     common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net,
-                     'delayed_reward_threshold': delayed_reward_threshold, 'num_ticker': num_stocks, 'hold_criter': hold_criter, 'num_steps':num_steps, 'lr': lr, 'test': args.test,
+                     'num_ticker': num_stocks, 'hold_criter': hold_criter, 'num_steps':num_steps, 'lr': lr, 'test': args.test,
                      'price_data': price_data, 'cap_data': cap_data, 'index_data' : index_data, 'index_ppc':index_ppc, 'training_data': training_data, 'reuse_models': reuse_models,
                      'output_path': output_path, 'value_network1_path': value_network1_path, 'value_network2_path':value_network2_path, 'target_value_network1_path': target_value_network1_path,
                      'target_value_network2_path': target_value_network2_path, 'policy_network_path': policy_network_path}
 
     learner = A2CLearner(**{**common_params})
     if learner is not None:
-        learner.run(balance=balance, num_epoches=num_epoches, start_epsilon=start_epsilon)
+        learner.run(balance=balance, num_epoches=num_epoches)
         learner.save_models()

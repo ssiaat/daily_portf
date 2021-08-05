@@ -5,7 +5,7 @@ print(f'Keras Backend : {os.environ["KERAS_BACKEND"]}')
 
 from keras.models import Model, Sequential
 from keras.layers import Dense, Dropout, LSTM, LayerNormalization, Concatenate, MultiHeadAttention
-from tensorflow.keras.initializers import glorot_uniform
+from tensorflow.keras.initializers import glorot_normal
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import mean_squared_error as mse
 from keras import Input
@@ -16,7 +16,7 @@ class Network:
     lock = threading.Lock()
 
     def __init__(self, input_dim=0, output_dim=0, num_ticker=100, num_index=5, num_steps=5, trainable=True,
-                 activation=None, value_flag='True'):
+                 batch_size=1, activation=None, value_flag='True'):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.num_ticker = num_ticker
@@ -24,7 +24,7 @@ class Network:
         self.num_steps = num_steps
         self.trainable = trainable
         self.model = None
-        self.initializer = glorot_uniform()
+        self.initializer = glorot_normal()
         self.activation = 'relu'
         self.activation_last = activation
         self.value_flag = value_flag
@@ -32,6 +32,7 @@ class Network:
             self.last_idx = -2
         else:
             self.last_idx = -1
+        self.batch_size = batch_size
 
     def save_model(self, model_path):
         if model_path is not None and self.model is not None:
@@ -139,9 +140,11 @@ class AttentionLSTM(Network):
         hidden_h = Dense(self.hidden_size_lstm, activation=self.activation, kernel_initializer=self.initializer)(hidden_h)
         h_p = tf.math.tanh(h + h_hat + hidden_h)
 
-        # if self.value_flag:
-        #     output_portf = Dense(self.hidden_size_lstm, activation=self.activation_last, kernel_initializer=self.initializer)(inp_portf)
-        #     h_p = Concatenate(axis=1)([h_p, output_portf])
+        if self.value_flag:
+            h_p = tf.reshape(h_p, (self.batch_size, self.num_ticker,-1))
+            inp_portf = tf.reshape(inp_portf, (self.batch_size, self.num_ticker, 1))
+            h_p = Concatenate(axis=2)([h_p, inp_portf])
+            h_p = tf.reshape(h_p, (self.batch_size, self.num_ticker, self.hidden_size_lstm + 1))
         output = Dense(self.hidden_size_lstm * 2, activation=self.activation_last, kernel_initializer=self.initializer)(h_p)
 
         return Model(inp, output)
@@ -164,8 +167,8 @@ class pi_network:
         self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
 
-    def predict(self, x, deterministic=False, learn=True):
-        output = self.network.model(x)
+    def predict(self, s, deterministic=False, learn=True):
+        output = self.network.model(s)
         mu = tf.reshape(self.mu_layer(output), (-1, self.network.num_ticker))
         log_std = tf.reshape(self.log_std_layer(output), (-1, self.network.num_ticker))
         log_std = tf.clip_by_value(log_std, LOG_STD_MIN, LOG_STD_MAX)
@@ -230,10 +233,10 @@ class q_network:
         s.append(a)
         output1 = self.network1.model(s)
         output1 = self.layer1(output1)
-        output1 = tf.reshape(output1, shape=(self.network1.num_steps, self.network1.num_ticker))
+        output1 = tf.reshape(output1, shape=(self.network1.batch_size, self.network1.num_ticker))
         output2 = self.network2.model(s)
         output2 = self.layer2(output2)
-        output2 = tf.reshape(output2, shape=(self.network1.num_steps, self.network1.num_ticker))
+        output2 = tf.reshape(output2, shape=(self.network1.batch_size, self.network1.num_ticker))
         return output1, output2
 
     def learn(self, s, a, backup):
