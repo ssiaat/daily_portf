@@ -2,15 +2,14 @@ import numpy as np
 
 class Environment:
 
-    def __init__(self, price_data=None, cap_data=None, index_data=None, index_ppc=None, training_data=None,
-                 stock_codes_yearly=None, num_ticker=10, num_steps=5, num_features=12):
+    def __init__(self, price_data=None, cap_data=None, index_data=None, index_ppc=None,
+                 training_data=None, num_ticker=10, num_steps=5, num_features=12):
         self.price_data = price_data
         self.cap_data = cap_data
         self.index_data = index_data
         self.index_ppc = index_ppc
         self.ks_data = index_data.ks200
         self.training_data = training_data
-        self.stock_codes_yearly = stock_codes_yearly
 
         self.num_ticker = num_ticker
         self.num_steps = num_steps
@@ -25,20 +24,22 @@ class Environment:
         self.date_list = price_data.index  # 3차원 데이터를 date로 접근해야해서 필요
         self.year = self.date_list[0].year  # test환경에서 year값이 변하면 종목을 변경해줘야함
 
-        self.universe = self.stock_codes_yearly[self.stock_codes_idx]
-        self.last_universe = None
+        self.universe = list(self.cap_data.iloc[0].dropna().index)
+        self.last_universe = list(self.cap_data.iloc[0].dropna().index)
 
     def reset(self):
         self.idx = -1
+        self.universe = list(self.cap_data.iloc[0].dropna().index)
+        self.last_universe = list(self.cap_data.iloc[0].dropna().index)
 
     def observe(self):
         if len(self.price_data) > self.idx + self.num_steps:
             self.idx += 1
+            diff_stock_codes = self.update_stock_codes()
             self.observe_price = self.price_data.iloc[self.idx + self.num_steps - 1][self.universe]
             self.observe_cap = self.cap_data.iloc[self.idx + self.num_steps - 1][self.universe]
-            self.observe_cap = self.observe_cap / self.observe_cap.sum()
             self.observe_ks = self.ks_data.iloc[self.idx + self.num_steps - 1]
-            return self.idx
+            return diff_stock_codes, self.idx
         return None
 
     def get_price(self):
@@ -81,21 +82,16 @@ class Environment:
 
     # test시 1년이 지나면 stock code변경
     def update_stock_codes(self):
-        if len(self.price_data) > self.idx + self.num_steps:
-            if self.date_list[self.idx + self.num_steps].year != self.year:
-                self.last_universe = self.universe.copy()
-                self.year = self.date_list[self.idx + self.num_steps].year
-                self.stock_codes_idx += 1
-                diff_universe = [x for x in self.stock_codes_yearly[self.stock_codes_idx] if x not in self.last_universe]
-                diff_universe_idx = 0
-                ret = []
-                for i, x in enumerate(self.last_universe):
-                    if x not in self.stock_codes_yearly[self.stock_codes_idx]:
-                        self.universe[i] = diff_universe[diff_universe_idx]
-                        diff_universe_idx += 1
-                        ret.append(i)
-                if len(ret) == 0:
-                    ret = None
-                return ret
-        return None
-
+        self.last_universe = self.universe.copy()
+        today_stock_codes = self.cap_data.iloc[self.idx].dropna().index
+        diff_universe = [x for x in today_stock_codes if x not in self.last_universe]
+        diff_universe_idx = 0
+        ret = None
+        if len(diff_universe) != 0:
+            ret = []
+            for i, x in enumerate(self.last_universe):
+                if x not in today_stock_codes:
+                    self.universe[i] = diff_universe[diff_universe_idx]
+                    diff_universe_idx += 1
+                    ret.append(i)
+        return ret

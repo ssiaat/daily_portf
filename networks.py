@@ -5,7 +5,7 @@ print(f'Keras Backend : {os.environ["KERAS_BACKEND"]}')
 
 from keras.models import Model, Sequential
 from keras.layers import Dense, Dropout, LSTM, LayerNormalization, Concatenate, MultiHeadAttention
-from tensorflow.keras.initializers import glorot_normal
+from tensorflow.keras.initializers import glorot_uniform
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import mean_squared_error as mse
 from keras import Input
@@ -24,7 +24,7 @@ class Network:
         self.num_steps = num_steps
         self.trainable = trainable
         self.model = None
-        self.initializer = glorot_normal()
+        self.initializer = glorot_uniform()
         self.activation = 'relu'
         self.activation_last = activation
         self.value_flag = value_flag
@@ -197,6 +197,7 @@ class pi_network:
             q_pi = tf.math.minimum(q1_pi, q2_pi)
             loss_pi = tf.reduce_mean(self.alpha * logp_pi - q_pi, axis=1)
         gradients = tape.gradient(loss_pi, self.network.model.trainable_variables)
+        gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
         self.optimizer.apply_gradients(zip(gradients, self.network.model.trainable_variables))
         return tf.reduce_mean(loss_pi)
 
@@ -246,8 +247,10 @@ class q_network:
             loss_q2 = tf.math.sqrt(self.loss(backup, q2))
 
         gradients1 = tape_q.gradient(loss_q1, self.network1.model.trainable_variables)
+        gradients1, _ = tf.clip_by_global_norm(gradients1, 1.0)
         self.optimizer1.apply_gradients(zip(gradients1, self.network1.model.trainable_variables))
         gradients2 = tape_pi.gradient(loss_q2, self.network2.model.trainable_variables)
+        gradients2, _ = tf.clip_by_global_norm(gradients2, 1.0)
         self.optimizer2.apply_gradients(zip(gradients2, self.network2.model.trainable_variables))
         return tf.reduce_mean(loss_q1 + loss_q2)
 

@@ -20,9 +20,8 @@ class ReinforcementLearner:
     __metaclass__ = abc.ABCMeta
     lock = threading.Lock()
 
-    def __init__(self, stock_codes_yearly=None, stock_codes=None, trainable=True, net='dnn', test=False,
-                price_data=None, cap_data=None, index_data=None, index_ppc=None, training_data=None, num_steps=5,
-                hold_criter=0., num_ticker=100, num_features=7, num_index=5, lr=0.001,
+    def __init__(self, trainable=True, net='dnn', test=False, hold_criter=0., num_ticker=100, num_features=7, num_index=5,
+                price_data=None, cap_data=None, index_data=None, index_ppc=None, training_data=None, num_steps=5, lr=0.001,
                 value_network1_path=None, value_network2_path=None, target_value_network1_path=None,
                 target_value_network2_path=None, policy_network_path=None, output_path='', reuse_models=True):
         # 인자 확인
@@ -34,7 +33,7 @@ class ReinforcementLearner:
 
         # 환경 설정
         self.environment = Environment(price_data, cap_data, index_data, index_ppc, training_data,
-                                       stock_codes_yearly, num_ticker, num_steps, num_features)
+                                       num_ticker, num_steps, num_features)
         self.net = net
 
         # 추가 데이터 설정
@@ -45,7 +44,7 @@ class ReinforcementLearner:
         self.agent = Agent(self.environment, num_ticker=num_ticker, hold_criter=hold_criter)
 
         # 학습 데이터
-        self.total_len = len(training_data.index) / len(stock_codes)  # 전체 학습 기간의 날짜 수
+        self.total_len = len(price_data)  # 전체 학습 기간의 날짜 수
         self.num_ticker = num_ticker
         self.num_features = num_features
         self.num_index = num_index
@@ -91,6 +90,7 @@ class ReinforcementLearner:
         self.deterministic = True if self.test else False
         self.polyak = 0.95
         self.batch_size = 5
+        self.max_sample_len = 200
 
     def init_value_network(self, activation='linear'):
         self.value_network = q_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
@@ -126,7 +126,7 @@ class ReinforcementLearner:
         self.agent.reset()
 
         # 메모리 초기화
-        self.memory_sample_idx = deque(maxlen=200)
+        self.memory_sample_idx = deque(maxlen=self.max_sample_len)
         self.memory_action = []
         self.memory_reward = []
         self.memory_value = []
@@ -141,7 +141,7 @@ class ReinforcementLearner:
         self.learning_cnt = 0
 
     def build_sample(self):
-        idx = self.environment.observe()
+        self.diff_stocks_idx, idx = self.environment.observe()
         sample = None
         if idx is not None:
             sample = self.environment.get_training_data(idx)
@@ -212,6 +212,8 @@ class ReinforcementLearner:
                 sample, idx = self.build_sample()
                 if sample is None:
                     break
+                if self.diff_stocks_idx:
+                    print(f'change universe  {len(self.diff_stocks_idx)}')
                 next_sample = self.environment.transform_sample(sample[0])
                 next_sample.append(np.array([sample[1]]))
 
@@ -231,6 +233,7 @@ class ReinforcementLearner:
 
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
                 self.agent.act(ratio, self.diff_stocks_idx)
+
                 self.diff_stocks_idx = None
 
                 # 행동 및 행동에 대한 결과를 기억
@@ -245,14 +248,13 @@ class ReinforcementLearner:
                 if self.itr_cnt % 10 == 0:
                     if not self.test and self.itr_cnt == 10:
                         _ = self.memory_sample_idx.popleft()
-                    self.fit()
+                    fit_iter = 3 if len(self.memory_sample_idx) == self.max_sample_len else 1
+                    for _ in range(fit_iter):
+                        self.fit()
                     print('{:,} {:.4f}'.format(self.agent.portfolio_value, (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
 
-                # test는 연도별로 종목 갱신, 하루 끝나고 매일 체크
-                if self.test:
-                    self.diff_stocks_idx = self.environment.update_stock_codes()
-                    if self.diff_stocks_idx:
-                        print(f'change universe  {len(self.diff_stocks_idx)}')
+                if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
+                    return
 
             # 에포크 종료 후 학습
             for i in range(10):

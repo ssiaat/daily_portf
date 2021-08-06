@@ -14,13 +14,13 @@ os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Hyperparameters
-num_stocks = 10  # universe에 존재하는 종목수
+num_stocks = 200  # universe에 존재하는 종목수
 num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
-start_year = 2000 # 시작 연도
+start_year = 2004 # 시작 연도
 end_year = 2015   # 종료 연도
 
 lr = 0.001
-net = 'dnn'
+net = 'lstm'
 discount_factor = 0.9
 balance = 1e9     # 초기 자본금
 num_epoches = 20
@@ -75,6 +75,7 @@ if __name__ == '__main__':
     else:
         print('This running is for training')
     start_date = indexes.index[indexes.index.year == start_year][0]
+    end_date = indexes.index[indexes.index.year == end_year][-1]
 
     if net == 'dnn':
         num_steps = 1
@@ -98,25 +99,14 @@ if __name__ == '__main__':
         target_value_network2_path = os.path.join(output_path, '{}_tv2.h5'.format(output_name))
         policy_network_path = os.path.join(output_path, '{}_p.h5'.format(output_name))
 
-    # 포트폴리오 구성 ticker정하고 데이터 불러옴
-    # 리밸런싱이 있는 기간에 리밸런싱을 할 날짜 계산
-    rebalance_date = set_rebalance_date(start_year-1, end_year)
-    if not args.test:
-        rebalance_date = [rebalance_date[-1]]
-    else:
-        rebalance_date = rebalance_date[:-1]
-
-    # 리밸런싱 날짜마다 종목구하고 전체 종목 universe 계산
-    stock_codes_yearly, stock_codes = get_stock_codes(num_stocks, rebalance_date)
-    print(f'yearly: {num_stocks} total: {len(stock_codes)} stocks in universe')
-    price_data, cap_data, index_data, index_ppc, training_data = make_data(stock_codes, start_date, rebalance_date[-1], args.stationary, args.test)
+    price_data, index_data, index_ppc, training_data = make_data(start_date, end_date, args.stationary, args.test)
 
     # 공통 파라미터 설정
-    common_params = {'stock_codes_yearly': stock_codes_yearly, 'stock_codes': stock_codes, 'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net,
-                     'num_ticker': num_stocks, 'hold_criter': hold_criter, 'num_steps':num_steps, 'lr': lr, 'test': args.test,
-                     'price_data': price_data, 'cap_data': cap_data, 'index_data' : index_data, 'index_ppc':index_ppc, 'training_data': training_data, 'reuse_models': reuse_models,
-                     'output_path': output_path, 'value_network1_path': value_network1_path, 'value_network2_path':value_network2_path, 'target_value_network1_path': target_value_network1_path,
-                     'target_value_network2_path': target_value_network2_path, 'policy_network_path': policy_network_path}
+    common_params = {'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net,
+                     'num_ticker': num_stocks, 'hold_criter': hold_criter, 'num_steps':num_steps, 'lr': lr, 'test': args.test, 'reuse_models': reuse_models,
+                     'price_data': price_data, 'cap_data':capital, 'index_data' : index_data, 'index_ppc':index_ppc, 'training_data': training_data,
+                     'output_path': output_path, 'value_network1_path': value_network1_path, 'value_network2_path':value_network2_path,
+                     'target_value_network1_path': target_value_network1_path, 'target_value_network2_path': target_value_network2_path, 'policy_network_path': policy_network_path}
 
     learner = A2CLearner(**{**common_params})
     if learner is not None:

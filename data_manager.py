@@ -4,17 +4,18 @@ from tqdm import tqdm
 
 # db연결
 import pymysql
-conn = pymysql.connect(host='localhost', user='root', password='0000', db='ticker', port=3306, charset='utf8')
+conn = pymysql.connect(host='localhost', user='root', password='0000', db='ks200', port=3306, charset='utf8')
 
 curs = conn.cursor()
 
 # ks200 데이터는 따로 받아옴
 sql = f"SELECT * FROM indexes ORDER BY indexes.date ASC;"
-indexes = pd.read_sql(sql=sql, con=conn).set_index('date')
-capital = pd.read_csv('data/capital.csv', index_col='date', parse_dates=True)
+indexes = pd.read_sql(sql=sql, con=conn).set_index('date').ffill()
+capital = pd.read_csv('data/ks200_cap.csv', index_col='date', parse_dates=True)
+capital.columns = [i[1:] for i in capital.columns]
 
-COLUMNS_CHART_DATA = ['date', 'price_mod', 'open', 'high', 'low', 'close', 'cap']
-COLUMNS_TRAINING_DATA = ['open', 'high', 'low', 'close', 'price_mod', 'volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'netbuy_individual', 'trs_amount']
+COLUMNS_CHART_DATA = ['date', 'price_mod']
+COLUMNS_TRAINING_DATA = ['price_mod', 'volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'trs_amount']
 
 def set_rebalance_date(start_year, end_year):
     index_temp = indexes.copy()
@@ -57,6 +58,8 @@ def preprocessing(data, start_idx, end_idx, test=False):
         if test:
             max_num = data.iloc[:start_idx][col].max()
             min_num = data.iloc[:start_idx][col].min()
+        if max_num == min_num:
+            max_num += 1e-6
         data[col] = (data[col] - min_num) / (max_num - min_num)
     return data
 
@@ -73,7 +76,7 @@ def get_weights_FFD(d, thres):
 w = get_weights_FFD(0.6, 1e-4)
 
 
-def make_data(stock_codes, start_date, end_date, stationary, test):
+def make_data(start_date, end_date, stationary, test):
     global indexes
     start_idx = list(indexes.index).index(start_date)
     if stationary:
@@ -84,27 +87,26 @@ def make_data(stock_codes, start_date, end_date, stationary, test):
     training_data_list = []
     training_data_idx = []
     price_df = pd.DataFrame(index=date_idx)
-    cap_df = pd.DataFrame(index=date_idx)
 
+    stock_codes = capital.columns
     for stock_code in tqdm(stock_codes):
         # From local db,. 한종목씩
-        price_data, cap_data, training_data = load_data_sql(stock_code, date_idx, start_idx, end_idx, stationary, test)
+        price_data, training_data = load_data_sql(stock_code, date_idx, start_idx, end_idx, stationary, test)
         training_data_idx.append(stock_code)
         training_data_list.append(training_data)
         price_df = pd.concat([price_df, price_data], axis=1)
-        cap_df = pd.concat([cap_df, cap_data], axis=1)
 
     # training_df 는 3차원으로 설정
     # date -> stock code -> data
     training_df = pd.concat(training_data_list, keys=training_data_idx)
     training_df = training_df.swaplevel(0,1).sort_index(level=0)
 
-    index_c = indexes.copy().ffill()
+    index_c = indexes.copy()
     indexe_ppc = preprocessing(index_c, start_idx, end_idx, test)
     if stationary:
         indexe_ppc = indexe_ppc.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
-    return price_df.fillna(0), cap_df.fillna(0), indexes.loc[price_df.index], indexe_ppc.loc[price_df.index], training_df.fillna(0)
+    return price_df.fillna(0), indexes.loc[price_df.index], indexe_ppc.loc[price_df.index], training_df.fillna(0)
 
 
 # load_data_sql 한종목을 읽어오는것.
@@ -115,6 +117,7 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
 
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
+    data['price_mod_temp'] = data['price_mod'].copy()
 
     # 학습 데이터 분리, 전처리
     training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
@@ -127,10 +130,8 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     training_data = pd.merge(temp, training_data, how='left', left_on=temp.index, right_on=training_data.index).set_index('key_0')
 
     # 차트 데이터 분리
-    price_data = data['price_mod']
+    price_data = data['price_mod_temp']
     price_data.name = fpath
-    cap_data = data['cap']
-    cap_data.name = fpath
 
     # date 처리
-    return price_data, cap_data, training_data
+    return price_data, training_data

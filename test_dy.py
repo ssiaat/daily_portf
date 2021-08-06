@@ -1,4 +1,4 @@
-# import data_manager
+import data_manager
 # import matplotlib.pyplot as plt
 import numpy as np
 
@@ -20,4 +20,5 @@ import os
 # plt.plot(df)
 # print(list(df.index).index(pd.Timestamp('20210630')))
 # from datetime import datetime
-print(data_manager.indexes.ks200.iloc[0])
+# print(data_manager.capital.iloc[0].dropna().index)
+# print(data_manager.capital[2300:2350]['003190'])

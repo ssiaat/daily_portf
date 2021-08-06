@@ -80,8 +80,10 @@ class Agent:
 
     def similar_with_cap(self, ratio):
         curr_cap = self.environment.get_cap()
+        curr_cap = np.where(np.isnan(curr_cap), 0., curr_cap)
         curr_price = self.environment.get_price()
-        curr_cap = self.set100(tf.where(curr_price == 0., 0., curr_cap))
+        curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap))
+        ratio = tf.math.softmax(ratio)
         ratio = tf.clip_by_value(ratio, curr_cap - self.OVER_CAP[1], curr_cap + self.OVER_CAP[0])
         ratio = self.set100(tf.clip_by_value(ratio, 0, 100))
         return ratio
@@ -91,6 +93,11 @@ class Agent:
             curr_price = self.environment.get_price()
             if diff_stock_idx is not None:
                 curr_price = self.environment.get_price_last_portf()
+            # 상장폐지 처리, 다음 종가로 갱신할 때 가격, 비율 정보 모두 없으면 상폐로 간주하고 종목 가치만큼 차감
+            if not transaction:
+                curr_cap = self.environment.get_cap()
+                self.num_stocks = np.where((curr_price == 0.) and np.isnan(curr_cap), 0, self.num_stocks)
+                
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
                 # 매도 수수료는 balance에 반영 -> 매수만 반영
@@ -147,7 +154,6 @@ class Agent:
         # 거래정지 상태인데 거래하는 경우 방지
         buy_trading_unit = tf.math.floor(self.set100(tf.where(curr_price == 0., 0., buy_trading_ratio)) * \
                                     (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price == 0., 1., curr_price))
-
         return buy_trading_unit, sell_trading_unit
 
     def get_reward(self):
