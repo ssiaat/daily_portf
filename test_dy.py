@@ -1,4 +1,4 @@
-import data_manager
+# import data_manager
 # import matplotlib.pyplot as plt
 import numpy as np
 
@@ -22,3 +22,9 @@ import os
 # from datetime import datetime
 # print(data_manager.capital.iloc[0].dropna().index)
 # print(data_manager.capital[2300:2350]['003190'])
+
+a = np.array([1,2,3, np.nan, np.nan])
+c = np.isnan(a)
+b = np.array([1,2,3,4,5])
+print(~c)
+print(np.where(b*c == 4, -1, b))

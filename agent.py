@@ -96,7 +96,8 @@ class Agent:
             # 상장폐지 처리, 다음 종가로 갱신할 때 가격, 비율 정보 모두 없으면 상폐로 간주하고 종목 가치만큼 차감
             if not transaction:
                 curr_cap = self.environment.get_cap()
-                self.num_stocks = np.where((curr_price == 0.) and np.isnan(curr_cap), 0, self.num_stocks)
+                cap_nan_check = ~np.isnan(curr_cap)
+                self.num_stocks = np.where((curr_price + cap_nan_check) == 0., 0, self.num_stocks)
                 
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:

@@ -53,7 +53,7 @@ class Environment:
 
     def get_cap(self):
         if self.observe_cap is not None:
-            return self.observe_cap.values.reshape(-1,)
+            return self.observe_cap.values.reshape(-1,).astype(np.float32)
         return None
 
     def get_ks(self):
