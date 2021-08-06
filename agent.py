@@ -96,15 +96,15 @@ class Agent:
             # 상장폐지 처리, 다음 종가로 갱신할 때 가격, 비율 정보 모두 없으면 상폐로 간주하고 종목 가치만큼 차감
             if not transaction:
                 curr_cap = self.environment.get_cap()
-                cap_nan_check = ~np.isnan(curr_cap)
-                self.num_stocks = np.where((curr_price + cap_nan_check) == 0., 0, self.num_stocks)
+                cap_nan_check = tf.cast(~tf.math.is_nan(curr_cap), tf.float32)
+                self.num_stocks = tf.where((curr_price + cap_nan_check) == 0., 0., self.num_stocks)
                 
             self.portfolio_value_each = self.num_stocks * curr_price
             if transaction:
                 # 매도 수수료는 balance에 반영 -> 매수만 반영
                 self.portfolio_value_each -= tf.math.ceil(buy_value_each * self.TRADING_TAX[0])
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
-            self.portfolio_value = tf.reduce_sum(self.portfolio_value_each) + self.balance
+            self.portfolio_value = tf.cast(tf.reduce_sum(self.portfolio_value_each), tf.float32) + self.balance
 
 
     def decide_action(self, ratio):
