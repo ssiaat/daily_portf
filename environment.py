@@ -40,7 +40,7 @@ class Environment:
             self.observe_cap = self.cap_data.iloc[self.idx + self.num_steps - 1][self.universe]
             self.observe_ks = self.ks_data.iloc[self.idx + self.num_steps - 1]
             return diff_stock_codes, self.idx
-        return None
+        return None, None
 
     def get_price(self):
         if self.observe_price is not None:
