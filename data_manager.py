@@ -5,8 +5,8 @@ from tqdm import tqdm
 # db연결
 import pymysql
 conn = pymysql.connect(host='localhost', user='root', password='0000', db='ks200', port=3306, charset='utf8')
-
 curs = conn.cursor()
+
 
 # ks200 데이터는 따로 받아옴
 sql = f"SELECT * FROM indexes ORDER BY indexes.date ASC;"
@@ -73,7 +73,7 @@ def get_weights_FFD(d, thres):
         k+=1
     return np.array(w[::-1]).reshape(-1,)
 
-w = get_weights_FFD(0.6, 1e-4)
+w = get_weights_FFD(0.55, 1e-4)
 
 
 def make_data(start_date, end_date, stationary, test):
@@ -123,6 +123,8 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
     if stationary:
         training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+    training_data.to_csv(f'./data/{fpath}.csv')
+    exit()
 
     # index 조정
     temp = pd.DataFrame(index=date_idx)
