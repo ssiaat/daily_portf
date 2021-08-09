@@ -88,7 +88,7 @@ class ReinforcementLearner:
         self.alpha = 0.2  # entropy 반영 비율
         self.discount_factor = 0.9  # 할인율
         self.deterministic = True if self.test else False
-        self.polyak = 0.95
+        self.polyak = 0.98
         self.batch_size = 5
         self.max_sample_len = 200
         self.clip = True
@@ -153,15 +153,15 @@ class ReinforcementLearner:
         pass
 
     @abc.abstractmethod
-    def calculate_yvalue(self, r, next_s, d):
+    def calculate_yvalue(self, r, s, next_s, d):
         pass
 
     def update_networks(self, finished=False):
-        s, a, r, next_s, d = self.get_batch(finished)
+        s, a, r, last_s, next_s, d = self.get_batch(finished)
         # q loss
-        backup = self.calculate_yvalue(r, next_s, d)
+        backup = self.calculate_yvalue(r, s, next_s, d)
         value_loss = self.value_network.learn(s.copy(), a, backup)
-        policy_loss = self.policy_network.learn(s, self.value_network)
+        policy_loss = self.policy_network.learn(s, last_s, self.value_network)
 
         return value_loss, policy_loss
 
@@ -178,13 +178,15 @@ class ReinforcementLearner:
     def fit(self,finished=False):
         # 배치 학습 데이터 생성 및 신경망 갱신
         value_loss, policy_loss = self.update_networks(finished)
-        print('{:.4f} {:.4f}' .format(self.policy_loss, self.value_loss))
+        print('{:.4f} {:.4f}' .format(policy_loss, value_loss))
         self.value_loss += value_loss
         self.policy_loss += policy_loss
         self.learning_cnt += 1
 
         # target 신경망 갱신
         self.update_target_networks()
+
+
 
     def run(self, num_epoches=100, balance=10000000):
         info = "RL:a2c LR:{lr}".format(lr=self.lr)
@@ -323,11 +325,14 @@ class A2CLearner(ReinforcementLearner):
 
     def get_batch(self, finished=False):
         idx_batch = random.sample(list(itertools.islice(self.memory_sample_idx, 0, len(self.memory_sample_idx)-1)), self.batch_size)
+
         # 행동에 대한 보상은 다음날 알 수 있음
         s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
         s_index = np.zeros((self.batch_size, 1, 1, self.num_steps, self.num_index))
         next_s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
         next_s_index = np.zeros((self.batch_size, 1, 1, self.num_steps, self.num_index))
+        last_s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
+        last_s_index = np.zeros((self.batch_size, 1, 1, self.num_steps, self.num_index))
         action = np.zeros((self.batch_size, self.num_ticker))
         reward = np.zeros((self.batch_size, self.num_ticker))
         d = np.zeros((self.batch_size, 1))
@@ -335,6 +340,12 @@ class A2CLearner(ReinforcementLearner):
             sample = self.environment.get_training_data(idx)
             s[i] = self.environment.transform_sample(sample[0])
             s_index[i] = np.array([sample[1]])
+            sample = self.environment.get_training_data(idx + 1)
+            next_s[i] = self.environment.transform_sample(sample[0])
+            next_s_index[i] = np.array([sample[1]])
+            sample = self.environment.get_training_data(idx - 1)
+            last_s[i] = self.environment.transform_sample(sample[0])
+            last_s_index[i] = np.array([sample[1]])
             action[i] = np.array(self.memory_action[idx])
             reward[i] = self.memory_reward[idx+1]
             if idx == len(self.price_data) - 1:
@@ -345,12 +356,15 @@ class A2CLearner(ReinforcementLearner):
         s.append(*np.squeeze(s_index.swapaxes(0,1), axis=2))
         next_s = list(np.squeeze(next_s.swapaxes(0, 1), axis=2))
         next_s.append(*np.squeeze(next_s_index.swapaxes(0, 1), axis=2))
+        last_s = list(np.squeeze(last_s.swapaxes(0, 1), axis=2))
+        last_s.append(*np.squeeze(last_s_index.swapaxes(0, 1), axis=2))
 
-        return s, action, reward, next_s, d
+        return s, action, reward, last_s, next_s, d
 
-    def calculate_yvalue(self, r, next_s, d):
+    def calculate_yvalue(self, r, s, next_s, d):
+        a1, _ = self.policy_network.predict(next_s)
         a2, logp_a2 = self.policy_network.predict(next_s)
-        q1_pi_targ, q2_pi_targ = self.value_network.predict(next_s.copy(), a2)
+        q1_pi_targ, q2_pi_targ = self.value_network.predict(next_s.copy(), a2 - a1)
         q_pi_targ = tf.math.minimum(q1_pi_targ, q2_pi_targ)
         backup = r + self.discount_factor * (1 - d) * (q_pi_targ - self.alpha * logp_a2)
         return backup

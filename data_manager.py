@@ -64,14 +64,14 @@ def preprocessing(data, start_idx, end_idx, test=False):
     return data
 
 def get_weights_FFD(d, thres):
-    w, k = [1.], 1
+    w_list, k = [1.], 1
     while True:
-        w_ = -w[-1] / k * (d - k + 1)
+        w_ = -w_list[-1] / k * (d - k + 1)
         if abs(w_) < thres:
             break
-        w.append(w_)
+        w_list.append(w_)
         k+=1
-    return np.array(w[::-1]).reshape(-1,)
+    return np.array(w_list[::-1]).reshape(-1,)
 
 w = get_weights_FFD(0.55, 1e-4)
 
@@ -120,10 +120,7 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     data['price_mod_temp'] = data['price_mod'].copy()
     if stationary:
         training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
-        price_data = data['price_mod_temp'].loc[training_data.index]
-        print(training_data)
-        print(price_data)
-        exit()
+
     else:
         # 학습 데이터 분리, 전처리
         training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
@@ -131,13 +128,14 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
             training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
         # index 조정
-        temp = pd.DataFrame(index=date_idx)
-        data = pd.merge(temp, data, how='left', left_on=temp.index, right_on=data.index).set_index('key_0')
-        training_data = pd.merge(temp, training_data, how='left', left_on=temp.index, right_on=training_data.index).set_index('key_0')
+    temp = pd.DataFrame(index=date_idx)
+    data = pd.merge(temp, data, how='left', left_on=temp.index, right_on=data.index).set_index('key_0')
+    training_data = pd.merge(temp, training_data, how='left', left_on=temp.index, right_on=training_data.index).set_index('key_0')
 
-        # 차트 데이터 분리
-        price_data = data['price_mod_temp']
-        price_data.name = fpath
+    # 차트 데이터 분리
+    price_data = data['price_mod_temp']
+    price_data.name = fpath
 
     # date 처리
     return price_data, training_data
+

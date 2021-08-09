@@ -20,8 +20,10 @@ class Environment:
         self.observe_ks = None
         self.observe_index = None
         self.idx = -1
-        self.stock_codes_idx = 0
         self.date_list = price_data.index  # 3차원 데이터를 date로 접근해야해서 필요
+        self.date = None
+        self.stock_codes_idx = 0
+
         self.year = self.date_list[0].year  # test환경에서 year값이 변하면 종목을 변경해줘야함
 
         self.universe = list(self.cap_data.iloc[0].dropna().index)
@@ -29,16 +31,18 @@ class Environment:
 
     def reset(self):
         self.idx = -1
+        self.date = None
         self.universe = list(self.cap_data.iloc[0].dropna().index)
         self.last_universe = list(self.cap_data.iloc[0].dropna().index)
 
     def observe(self):
         if len(self.price_data) > self.idx + self.num_steps:
             self.idx += 1
+            self.date = self.date_list[self.idx + self.num_steps - 1]
             diff_stock_codes = self.update_stock_codes()
-            self.observe_price = self.price_data.iloc[self.idx + self.num_steps - 1][self.universe]
-            self.observe_cap = self.cap_data.iloc[self.idx + self.num_steps - 1][self.universe]
-            self.observe_ks = self.ks_data.iloc[self.idx + self.num_steps - 1]
+            self.observe_price = self.price_data.loc[self.date][self.universe]
+            self.observe_cap = self.cap_data.loc[self.date][self.universe]
+            self.observe_ks = self.ks_data.loc[self.date]
             return diff_stock_codes, self.idx
         return None, None
 
@@ -63,9 +67,6 @@ class Environment:
 
     def get_ks_to_reset(self):
         return self.ks_data.iloc[0]
-
-    def get_date(self):
-        return self.ks_data.index[self.idx + self.num_steps - 1]
 
     def get_training_data(self, idx):
         date_idx = self.date_list[idx:idx + self.num_steps]

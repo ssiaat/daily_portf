@@ -189,11 +189,12 @@ class pi_network:
         return pi_action, log_prob_pi
 
 
-    def learn(self, s, value_network):
+    def learn(self, s, last_s, value_network):
         with tf.GradientTape() as tape:
             pi, logp_pi = self.predict(s)
+            pi2, _ = self.predict(last_s)
             # pi 업데이트라 q_net gradient off
-            q1_pi, q2_pi = tf.stop_gradient(value_network.predict(s, pi))
+            q1_pi, q2_pi = tf.stop_gradient(value_network.predict(s, pi - pi2))
             q_pi = tf.math.minimum(q1_pi, q2_pi)
             loss_pi = tf.reduce_mean(self.alpha * logp_pi - q_pi, axis=1)
         gradients = tape.gradient(loss_pi, self.network.model.trainable_variables)
@@ -225,9 +226,9 @@ class q_network:
         self.layer2 = Dense(self.network2.output_dim, activation=self.network2.activation_last,
                             kernel_initializer=self.network2.initializer)
         self.loss = mse
-        lr_scheduler1 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
+        lr_scheduler1 = tf.keras.optimizers.schedules.ExponentialDecay(lr * 10, 500, 0.96, True)
         self.optimizer1 = Adam(lr_scheduler1, clipnorm=.01)
-        lr_scheduler2 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
+        lr_scheduler2 = tf.keras.optimizers.schedules.ExponentialDecay(lr * 10, 500, 0.96, True)
         self.optimizer2 = Adam(lr_scheduler2, clipnorm=.01)
 
     def predict(self, s, a):
@@ -247,10 +248,10 @@ class q_network:
             loss_q2 = tf.math.sqrt(self.loss(backup, q2))
 
         gradients1 = tape_q.gradient(loss_q1, self.network1.model.trainable_variables)
-        gradients1, _ = tf.clip_by_global_norm(gradients1, 1.0)
+        # gradients1, _ = tf.clip_by_global_norm(gradients1, 1.0)
         self.optimizer1.apply_gradients(zip(gradients1, self.network1.model.trainable_variables))
         gradients2 = tape_pi.gradient(loss_q2, self.network2.model.trainable_variables)
-        gradients2, _ = tf.clip_by_global_norm(gradients2, 1.0)
+        # gradients2, _ = tf.clip_by_global_norm(gradients2, 1.0)
         self.optimizer2.apply_gradients(zip(gradients2, self.network2.model.trainable_variables))
         return tf.reduce_mean(loss_q1 + loss_q2)
 
