@@ -91,7 +91,7 @@ class ReinforcementLearner:
         self.polyak = 0.98
         self.batch_size = 5
         self.max_sample_len = 200
-        self.clip = True
+        self.clip = clip
 
     def init_value_network(self, activation='linear'):
         self.value_network = q_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
@@ -232,8 +232,7 @@ class ReinforcementLearner:
                 # 오늘 가격으로 변경된 portf_value로 어제 투자에 대한 보상 계산
                 immediate_reward = self.agent.get_reward()
 
-                ratio = self.agent.decide_action(pi, self.clip)
-                action = ratio - self.agent.portfolio_ratio
+                action, ratio = self.agent.decide_action(pi, self.clip)
 
                 if not self.clip:
                     curr_cap = self.environment.get_cap()
@@ -304,14 +303,19 @@ class ReinforcementLearner:
         if self.test:
             value_output1_path = self.value_network1_path[:-3] + '_output1' + self.value_network1_path[-3:]
             value_output2_path = self.value_network2_path[:-3] + '_output2' + self.value_network2_path[-3:]
+            target_value_output1_path = self.target_value_network1_path[:-3] + '_output1' + self.target_value_network1_path[-3:]
+            target_value_output2_path = self.target_value_network2_path[:-3] + '_output2' + self.target_value_network2_path[-3:]
             policy_network_path = self.policy_network_path[:-3] + '_output1' + self.policy_network_path[-3:]
             pd.DataFrame(self.memory_pv, index=self.price_data.index, columns=['pv']).to_csv('models/test_result.csv')
         else:
             value_output1_path = self.value_network1_path
             value_output2_path = self.value_network2_path
+            target_value_output1_path = self.target_value_network1_path
+            target_value_output2_path = self.target_value_network2_path
             policy_network_path = self.policy_network_path
         if self.value_network is not None and self.value_network1_path is not None:
             self.value_network.save_model([value_output1_path, value_output2_path])
+            self.target_value_network.save_model([target_value_output1_path, target_value_output2_path])
         if self.policy_network is not None and self.policy_network_path is not None:
             self.policy_network.save_model(policy_network_path)
 

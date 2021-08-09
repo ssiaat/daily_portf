@@ -7,12 +7,12 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = [0.03, 0.03]
+    OVER_CAP = [0.1, 0.1]
 
     # 행동
-    ACTION_BUY = 0  # 매수
+    ACTION_BUY = 2  # 매수
     ACTION_SELL = 1  # 매도
-    ACTION_HOLD = 2  # 홀딩
+    ACTION_HOLD = 0  # 홀딩
 
     # 인공 신경망에서 확률을 구할 행동들
     ACTIONS = [ACTION_BUY, ACTION_SELL]
@@ -84,7 +84,7 @@ class Agent:
         curr_price = self.environment.get_price()
         curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap))
         ratio = tf.math.softmax(ratio)
-        ratio = tf.clip_by_value(ratio, curr_cap - self.OVER_CAP[1], curr_cap + self.OVER_CAP[0])
+        ratio = tf.clip_by_value(ratio, curr_cap * (1 - self.OVER_CAP[1]), curr_cap * (1 + self.OVER_CAP[0]))
         ratio = self.set100(tf.clip_by_value(ratio, 0, 100))
         return ratio
 
@@ -108,24 +108,14 @@ class Agent:
 
 
     def decide_action(self, ratio, clip):
-        # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
-        diff = abs(ratio - self.portfolio_ratio)
-        action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
-
         # hold 여부 결정
         if self.hold_criter > 0.:
-            action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
             ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
         if clip:
             ratio = self.similar_with_cap(ratio)
-
-        # 횟수 갱신
-        self.num_buy += np.where(action==self.ACTION_BUY, 1, 0)
-        self.num_sell += np.where(action==self.ACTION_SELL, 1, 0)
-        self.num_hold += np.where(action == self.ACTION_HOLD, 1, 0)
-
-        return ratio
+        action = ratio - self.portfolio_ratio
+        return action, ratio
 
     def decide_trading_unit(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()
@@ -169,7 +159,7 @@ class Agent:
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
         self.immediate_reward = (self.profitloss - self.last_profitloss) * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio)
-        return self.immediate_reward * 100
+        return self.immediate_reward
 
     def act(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()
