@@ -253,7 +253,7 @@ class ReinforcementLearner:
                 self.itr_cnt += 1
 
                 if self.itr_cnt % 10 == 0:
-                    if not self.test and self.itr_cnt == 10:
+                    if self.itr_cnt == 10:
                         _ = self.memory_sample_idx.popleft()
                     fit_iter = 3 if len(self.memory_sample_idx) == self.max_sample_len else 1
                     for _ in range(fit_iter):

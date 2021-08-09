@@ -79,7 +79,7 @@ w = get_weights_FFD(0.55, 1e-4)
 def make_data(start_date, end_date, stationary, test):
     global indexes
     start_idx = list(indexes.index).index(start_date)
-    if stationary:
+    if stationary and not test:
         start_idx += len(w) - 1
     end_idx = list(indexes.index).index(end_date)
     date_idx = list(indexes.index)[start_idx:end_idx + 1]

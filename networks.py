@@ -112,7 +112,8 @@ class AttentionLSTM(Network):
     def get_attention_score(self, hidden_states):
         last_hidden_state = hidden_states[-1]
         attention_score = tf.exp(last_hidden_state * hidden_states)
-        attention_score = attention_score / tf.reduce_sum(attention_score)
+        block_nan = 1e-5 if tf.reduce_sum(attention_score) == 0. else tf.reduce_sum(attention_score)
+        attention_score = attention_score / block_nan
         context_vector = tf.reduce_sum(attention_score * hidden_states, axis=1)
         return context_vector
 
