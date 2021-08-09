@@ -22,7 +22,7 @@ class ReinforcementLearner:
 
     def __init__(self, trainable=True, net='dnn', test=False, hold_criter=0., num_ticker=100, num_features=7, num_index=5,
                 price_data=None, cap_data=None, index_data=None, index_ppc=None, training_data=None, num_steps=5, lr=0.001,
-                value_network1_path=None, value_network2_path=None, target_value_network1_path=None,
+                value_network1_path=None, value_network2_path=None, target_value_network1_path=None, clip=True,
                 target_value_network2_path=None, policy_network_path=None, output_path='', reuse_models=True):
         # 인자 확인
         assert lr > 0
@@ -91,6 +91,7 @@ class ReinforcementLearner:
         self.polyak = 0.95
         self.batch_size = 5
         self.max_sample_len = 200
+        self.clip = True
 
     def init_value_network(self, activation='linear'):
         self.value_network = q_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
@@ -177,6 +178,7 @@ class ReinforcementLearner:
     def fit(self,finished=False):
         # 배치 학습 데이터 생성 및 신경망 갱신
         value_loss, policy_loss = self.update_networks(finished)
+        print('{:.4f} {:.4f}' .format(self.policy_loss, self.value_loss))
         self.value_loss += value_loss
         self.policy_loss += policy_loss
         self.learning_cnt += 1
@@ -219,17 +221,21 @@ class ReinforcementLearner:
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pi, logp_pi = self.policy_network.predict(next_sample, self.deterministic, learn=False)
-                pi = self.agent.similar_with_cap(pi)
+                if self.clip:
+                    pi = self.agent.similar_with_cap(pi)
 
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                 self.agent.renewal_portfolio_ratio(transaction=False, diff_stock_idx=self.diff_stocks_idx)
 
                 # 오늘 가격으로 변경된 portf_value로 어제 투자에 대한 보상 계산
                 immediate_reward = self.agent.get_reward()
-                
-                # 신경망 또는 탐험에 의한 행동 결정
-                ratio = self.agent.decide_action(pi)
+
+                ratio = self.agent.decide_action(pi, self.clip)
                 action = ratio - self.agent.portfolio_ratio
+
+                if not self.clip:
+                    curr_cap = self.environment.get_cap()
+                    immediate_reward -= tf.reduce_sum(tf.math.abs(curr_cap - ratio)) / 2.0 * 100
 
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
                 self.agent.act(ratio, self.diff_stocks_idx)
@@ -330,7 +336,7 @@ class A2CLearner(ReinforcementLearner):
             s[i] = self.environment.transform_sample(sample[0])
             s_index[i] = np.array([sample[1]])
             action[i] = np.array(self.memory_action[idx])
-            reward[i] = self.memory_reward[idx+1] * 100
+            reward[i] = self.memory_reward[idx+1]
             if idx == len(self.price_data) - 1:
                 d[i] = 1
 

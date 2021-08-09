@@ -39,6 +39,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--stationary', action='store_true')
+    parser.add_argument('--clip', action='store_true')
     args = parser.parse_args()
 
     # Keras Backend 설정
@@ -102,7 +103,7 @@ if __name__ == '__main__':
     price_data, index_data, index_ppc, training_data = make_data(start_date, end_date, args.stationary, args.test)
 
     # 공통 파라미터 설정
-    common_params = {'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net,
+    common_params = {'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net, 'clip' : args.clip,
                      'num_ticker': num_stocks, 'hold_criter': hold_criter, 'num_steps':num_steps, 'lr': lr, 'test': args.test, 'reuse_models': reuse_models,
                      'price_data': price_data, 'cap_data':capital, 'index_data' : index_data, 'index_ppc':index_ppc, 'training_data': training_data,
                      'output_path': output_path, 'value_network1_path': value_network1_path, 'value_network2_path':value_network2_path,

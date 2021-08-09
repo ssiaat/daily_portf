@@ -118,22 +118,26 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
     data['price_mod_temp'] = data['price_mod'].copy()
-
-    # 학습 데이터 분리, 전처리
-    training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
     if stationary:
-        training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-    training_data.to_csv(f'./data/{fpath}.csv')
-    exit()
+        training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
+        price_data = data['price_mod_temp'].loc[training_data.index]
+        print(training_data)
+        print(price_data)
+        exit()
+    else:
+        # 학습 데이터 분리, 전처리
+        training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
+        if stationary:
+            training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
-    # index 조정
-    temp = pd.DataFrame(index=date_idx)
-    data = pd.merge(temp, data, how='left', left_on=temp.index, right_on=data.index).set_index('key_0')
-    training_data = pd.merge(temp, training_data, how='left', left_on=temp.index, right_on=training_data.index).set_index('key_0')
+        # index 조정
+        temp = pd.DataFrame(index=date_idx)
+        data = pd.merge(temp, data, how='left', left_on=temp.index, right_on=data.index).set_index('key_0')
+        training_data = pd.merge(temp, training_data, how='left', left_on=temp.index, right_on=training_data.index).set_index('key_0')
 
-    # 차트 데이터 분리
-    price_data = data['price_mod_temp']
-    price_data.name = fpath
+        # 차트 데이터 분리
+        price_data = data['price_mod_temp']
+        price_data.name = fpath
 
     # date 처리
     return price_data, training_data

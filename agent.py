@@ -107,7 +107,7 @@ class Agent:
             self.portfolio_value = tf.cast(tf.reduce_sum(self.portfolio_value_each), tf.float32) + self.balance
 
 
-    def decide_action(self, ratio):
+    def decide_action(self, ratio, clip):
         # 이전 비중보다 커지면 매수, 작아지면 매도로 행동 결정, 상한선 두기
         diff = abs(ratio - self.portfolio_ratio)
         action = np.where(diff > 0, self.ACTION_BUY, self.ACTION_SELL)
@@ -117,7 +117,8 @@ class Agent:
             action = np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.ACTION_HOLD, action)
             ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
-        ratio = self.similar_with_cap(ratio)
+        if clip:
+            ratio = self.similar_with_cap(ratio)
 
         # 횟수 갱신
         self.num_buy += np.where(action==self.ACTION_BUY, 1, 0)
@@ -168,7 +169,7 @@ class Agent:
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
         self.immediate_reward = (self.profitloss - self.last_profitloss) * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio)
-        return self.immediate_reward
+        return self.immediate_reward * 100
 
     def act(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()
