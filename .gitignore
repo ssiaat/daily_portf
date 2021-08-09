@@ -1,1 +1,4 @@
 *.csv
+*.h5
+*.json
+*.log

@@ -79,6 +79,7 @@ class DNN(Network):
         output = Concatenate()(output)
         output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dense(128, activation=self.activation, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
 
 # refer to paper DTML(jaemin yoo)
