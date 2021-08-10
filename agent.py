@@ -78,6 +78,13 @@ class Agent:
         else:
             return tensor
 
+    def penalty_diff_bm(self, ratio):
+        curr_cap = self.environment.get_cap()
+        curr_cap = self.set100(np.where(np.isnan(curr_cap) == True, 0., curr_cap))
+        ratio = self.set100(tf.where(curr_cap == 0., 0., ratio))
+        penalty = tf.reduce_sum(tf.math.abs(curr_cap - ratio)) / 2.0 * 100.0
+        return ratio, penalty * -1
+
     def similar_with_cap(self, ratio):
         curr_cap = self.environment.get_cap()
         curr_cap = np.where(np.isnan(curr_cap), 0., curr_cap)

@@ -100,6 +100,7 @@ if __name__ == '__main__':
         policy_network_path = os.path.join(output_path, '{}_p.h5'.format(output_name))
 
     price_data, index_data, index_ppc, training_data = make_data(start_date, end_date, args.stationary, args.test)
+    capital = capital.loc[price_data.index]
 
     # 공통 파라미터 설정
     common_params = {'num_features': len(training_data.columns), 'num_index':len(index_ppc.columns), 'net':net, 'clip' : args.clip,

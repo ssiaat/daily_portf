@@ -84,7 +84,7 @@ class Environment:
     # test시 1년이 지나면 stock code변경
     def update_stock_codes(self):
         self.last_universe = self.universe.copy()
-        today_stock_codes = self.cap_data.iloc[self.idx].dropna().index
+        today_stock_codes = self.cap_data.loc[self.date].dropna().index
         diff_universe = [x for x in today_stock_codes if x not in self.last_universe]
         diff_universe_idx = 0
         ret = None

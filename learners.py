@@ -235,8 +235,8 @@ class ReinforcementLearner:
                 action, ratio = self.agent.decide_action(pi, self.clip)
 
                 if not self.clip:
-                    curr_cap = self.environment.get_cap()
-                    immediate_reward -= tf.reduce_sum(tf.math.abs(curr_cap - ratio)) / 2.0 * 100
+                    ratio, penalty = self.agent.penalty_diff_bm(ratio)
+                    immediate_reward += penalty
 
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
                 self.agent.act(ratio, self.diff_stocks_idx)
