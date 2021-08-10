@@ -6,7 +6,7 @@ print(f'Keras Backend : {os.environ["KERAS_BACKEND"]}')
 from keras.models import Model, Sequential
 from keras.layers import Dense, Dropout, LSTM, LayerNormalization, Concatenate, MultiHeadAttention
 from tensorflow.keras.initializers import glorot_uniform
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.metrics import mean_squared_error as mse
 from keras import Input
 import tensorflow as tf
@@ -64,6 +64,8 @@ class DNN(Network):
 
     def mini_dnn(self):
         model = Sequential()
+        model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
+        model.add(Dropout(0.1, trainable=self.trainable))
         model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
         model.add(Dropout(0.1, trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
@@ -77,8 +79,10 @@ class DNN(Network):
         if self.value_flag:
             output.append(sub_models[-1](tf.reshape(inp[-1], (-1, self.num_ticker))))
         output = Concatenate()(output)
-        output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = self.residual_layer(output, 512)
+        output = self.residual_layer(output, 256)
+        # output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
+        # output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(128, activation=self.activation, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
 
@@ -113,9 +117,8 @@ class AttentionLSTM(Network):
         last_hidden_state = hidden_states[-1]
         attention_score = tf.exp(last_hidden_state * hidden_states)
         total_attention_score = tf.reduce_sum(attention_score)
-        if total_attention_score == 0.:
-            total_attention_score += 1e-4
-        attention_score = attention_score / total_attention_score
+        total_attention_score = tf.math.add(total_attention_score, 1e-4)
+        attention_score = tf.math.divide(attention_score, total_attention_score)
         context_vector = tf.reduce_sum(attention_score * hidden_states, axis=1)
         return context_vector
 
@@ -130,7 +133,8 @@ class AttentionLSTM(Network):
         inp_portf = None
         if self.value_flag:
             inp_portf = inp[-1]
-            context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp[:-1], sub_models)]
+            inp_data = inp[:-1]
+            context_vectors = [tf.convert_to_tensor([m(i)]) for i, m in zip(inp_data, sub_models)]
         else:
             context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp, sub_models)]
         context_vectors = [context_vectors[-1] + cv for cv in context_vectors[:-1]]
@@ -166,7 +170,7 @@ class pi_network:
         self.alpha = alpha
         self.discount_factor = 0.9
         lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer = Adam(lr_scheduler, clipnorm=.01)
+        self.optimizer = SGD(lr_scheduler)
         self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
         self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
@@ -231,9 +235,9 @@ class q_network:
                             kernel_initializer=self.network2.initializer)
         self.loss = mse
         lr_scheduler1 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer1 = Adam(lr_scheduler1, clipnorm=.01)
+        self.optimizer1 = SGD(lr_scheduler1)
         lr_scheduler2 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer2 = Adam(lr_scheduler2, clipnorm=.01)
+        self.optimizer2 = SGD(lr_scheduler2)
 
     def predict(self, s, a):
         s.append(a)
@@ -252,10 +256,8 @@ class q_network:
             loss_q2 = tf.math.sqrt(self.loss(backup, q2))
 
         gradients1 = tape_q.gradient(loss_q1, self.network1.model.trainable_variables)
-        gradients1, _ = tf.clip_by_global_norm(gradients1, 1.0)
         self.optimizer1.apply_gradients(zip(gradients1, self.network1.model.trainable_variables))
         gradients2 = tape_pi.gradient(loss_q2, self.network2.model.trainable_variables)
-        gradients2, _ = tf.clip_by_global_norm(gradients2, 1.0)
         self.optimizer2.apply_gradients(zip(gradients2, self.network2.model.trainable_variables))
         return tf.reduce_mean(loss_q1 + loss_q2)
 

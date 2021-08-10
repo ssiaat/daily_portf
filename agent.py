@@ -81,9 +81,13 @@ class Agent:
     def penalty_diff_bm(self, ratio):
         curr_cap = self.environment.get_cap()
         curr_cap = self.set100(np.where(np.isnan(curr_cap) == True, 0., curr_cap))
+        ratio = self.set100(tf.clip_by_value(ratio, 0., 1.))
         ratio = self.set100(tf.where(curr_cap == 0., 0., ratio))
-        penalty = tf.reduce_sum(tf.math.abs(curr_cap - ratio)) / 2.0 * 100.0
-        return ratio, penalty * -1
+        penalty = tf.math.abs(curr_cap - ratio) / 2.0 * 100.0
+        print('{:.4f}' .format(tf.reduce_sum(penalty)))
+        if tf.reduce_sum(penalty) < 30:
+            penalty = 0.
+        return ratio, penalty * -1.0
 
     def similar_with_cap(self, ratio):
         curr_cap = self.environment.get_cap()
@@ -166,7 +170,7 @@ class Agent:
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
         self.immediate_reward = (self.profitloss - self.last_profitloss) * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio)
-        return self.immediate_reward
+        return tf.cast(self.immediate_reward, tf.float32)
 
     def act(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()

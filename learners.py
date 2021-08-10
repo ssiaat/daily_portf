@@ -223,6 +223,8 @@ class ReinforcementLearner:
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pi, logp_pi = self.policy_network.predict(next_sample, self.deterministic, learn=False)
+                if self.agent.portfolio_value == self.agent.last_portfolio_value:
+                    print(pi[:50])
                 if self.clip:
                     pi = self.agent.similar_with_cap(pi)
 
@@ -231,12 +233,13 @@ class ReinforcementLearner:
 
                 # 오늘 가격으로 변경된 portf_value로 어제 투자에 대한 보상 계산
                 immediate_reward = self.agent.get_reward()
+                if not self.clip:
+                    pi, penalty = self.agent.penalty_diff_bm(pi)
+                    immediate_reward += penalty
 
                 action, ratio = self.agent.decide_action(pi, self.clip)
 
-                if not self.clip:
-                    ratio, penalty = self.agent.penalty_diff_bm(ratio)
-                    immediate_reward += penalty
+
 
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
                 self.agent.act(ratio, self.diff_stocks_idx)
