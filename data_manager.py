@@ -15,7 +15,7 @@ capital = pd.read_csv('data/ks200_cap.csv', index_col='date', parse_dates=True)
 capital.columns = [i[1:] for i in capital.columns]
 
 COLUMNS_CHART_DATA = ['date', 'price_mod']
-COLUMNS_TRAINING_DATA = ['price_mod', 'volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'trs_amount']
+COLUMNS_TRAINING_DATA = ['open', 'high', 'low', 'close', 'price_mod', 'volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'trs_amount']
 
 def set_rebalance_date(start_year, end_year):
     index_temp = indexes.copy()
@@ -100,7 +100,7 @@ def make_data(start_date, end_date, stationary, test):
     # date -> stock code -> data
     training_df = pd.concat(training_data_list, keys=training_data_idx)
     training_df = training_df.swaplevel(0,1).sort_index(level=0)
-
+    exit()
     index_c = indexes.copy()
     indexe_ppc = preprocessing(index_c, start_idx, end_idx, test)
     if stationary:
@@ -118,16 +118,16 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
     data['price_mod_temp'] = data['price_mod'].copy()
+    # if stationary:
+    #     training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
+    # else:
+    # 학습 데이터 분리, 전처리
+    training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
     if stationary:
-        training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
+        training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+        training_data.to_csv(f'./data/{fpath}.csv')
 
-    else:
-        # 학습 데이터 분리, 전처리
-        training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
-        if stationary:
-            training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-
-        # index 조정
+    # index 조정
     temp = pd.DataFrame(index=date_idx)
     data = pd.merge(temp, data, how='left', left_on=temp.index, right_on=data.index).set_index('key_0')
     training_data = pd.merge(temp, training_data, how='left', left_on=temp.index, right_on=training_data.index).set_index('key_0')

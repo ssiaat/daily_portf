@@ -1,11 +1,11 @@
-# import data_manager
+import data_manager
 # import matplotlib.pyplot as plt
 import numpy as np
 
 # from statsmodels.tsa.stattools import adfuller
 # import pandas as pd
 # import os
-import tensorflow as tf
+# import tensorflow as tf
 # out = pd.DataFrame(columns=['adfStat', 'pVal', 'lags', 'nObs', '95%conf', 'corr'])
 # df = data_manager.ks200
 # for d in np.linspace(0,1,11):
@@ -20,7 +20,8 @@ import tensorflow as tf
 # plt.plot(df)
 # print(list(df.index).index(pd.Timestamp('20210630')))
 # from datetime import datetime
-# print(data_manager.capital.iloc[0].dropna().index)
-# print(data_manager.capital[2300:2350]['003190'])
-a = np.random.random((3,5,10))
-print(tf.keras.layers.LSTM(30)(a))
+
+cap = data_manager.capital
+temp = (cap.T / cap.fillna(0).sum(axis=1)).T.iloc[-1].dropna().sort_values().values
+for t in temp:
+    print('{:.4f}'.format(t))

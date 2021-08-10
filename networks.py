@@ -12,6 +12,8 @@ from keras import Input
 import tensorflow as tf
 import tensorflow_probability as tfp
 
+optimizer = SGD
+
 class Network:
     lock = threading.Lock()
 
@@ -24,6 +26,7 @@ class Network:
         self.num_steps = num_steps
         self.trainable = trainable
         self.model = None
+        self.optimizer = SGD
         self.initializer = glorot_uniform()
         self.activation = 'relu'
         self.activation_last = activation
@@ -170,7 +173,7 @@ class pi_network:
         self.alpha = alpha
         self.discount_factor = 0.9
         lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer = Adam(lr_scheduler)
+        self.optimizer = optimizer(lr_scheduler)
         self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
         self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
@@ -235,9 +238,9 @@ class q_network:
                             kernel_initializer=self.network2.initializer)
         self.loss = mse
         lr_scheduler1 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer1 = Adam(lr_scheduler1)
+        self.optimizer1 = optimizer(lr_scheduler1)
         lr_scheduler2 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer2 = Adam(lr_scheduler2)
+        self.optimizer2 = optimizer(lr_scheduler2)
 
     def predict(self, s, a):
         s.append(a)
