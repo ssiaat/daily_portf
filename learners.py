@@ -56,7 +56,7 @@ class ReinforcementLearner:
         self.target_value_network = None
         self.policy_network = None
         self.reuse_models = reuse_models
-        self.output_dim = 1 if self.net == 'lstm' else self.num_ticker
+        self.output_dim = self.num_ticker
 
         # 메모리
         self.memory_sample_idx = deque(maxlen=200)
@@ -223,8 +223,6 @@ class ReinforcementLearner:
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pi, logp_pi = self.policy_network.predict(next_sample, self.deterministic, learn=False)
-                if self.agent.portfolio_value == self.agent.last_portfolio_value:
-                    print(pi[:50])
                 if self.clip:
                     pi = self.agent.similar_with_cap(pi)
 

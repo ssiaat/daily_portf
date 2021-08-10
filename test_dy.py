@@ -1,11 +1,11 @@
-import data_manager
+# import data_manager
 # import matplotlib.pyplot as plt
 import numpy as np
 
 # from statsmodels.tsa.stattools import adfuller
-import pandas as pd
-import os
-#
+# import pandas as pd
+# import os
+import tensorflow as tf
 # out = pd.DataFrame(columns=['adfStat', 'pVal', 'lags', 'nObs', '95%conf', 'corr'])
 # df = data_manager.ks200
 # for d in np.linspace(0,1,11):
@@ -22,7 +22,5 @@ import os
 # from datetime import datetime
 # print(data_manager.capital.iloc[0].dropna().index)
 # print(data_manager.capital[2300:2350]['003190'])
-
-print(len(data_manager.indexes))
-data_manager.make_data(data_manager.indexes.index[0], data_manager.indexes.index[-1], True, False)
-# print(len(data_manager.get_weights_FFD(0.5, 1e-7)))
+a = np.random.random((3,5,10))
+print(tf.keras.layers.LSTM(30)(a))

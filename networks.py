@@ -92,13 +92,13 @@ class AttentionLSTM(Network):
     def __init__(self, *args, num_steps=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_steps = num_steps
-        self.hidden_size_lstm = 128
+        self.hidden_size_lstm = 256
 
         # 마지막 input은 index
         inp = [Input((self.num_steps, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input((self.num_steps, self.num_index)))
         if self.value_flag:
-            inp.append(Input(shape=(None, self.num_ticker)))
+            inp.append(Input(shape=(self.num_ticker,)))
         sub_models = [self.mini_model() for _ in range(self.num_ticker + 1)]
         qkv_models = [self.qkv_model() for _ in range(3)]
         mha = MultiHeadAttention(4, 4)
@@ -133,27 +133,27 @@ class AttentionLSTM(Network):
         inp_portf = None
         if self.value_flag:
             inp_portf = inp[-1]
+            # inp_data = [tf.reshape(i, (self.num_steps, self.output_dim)) for i in inp[:-2]]
+            # inp_data.append(tf.reshape(inp[-2], (self.num_steps, self.num_index)))
             inp_data = inp[:-1]
-            context_vectors = [tf.convert_to_tensor([m(i)]) for i, m in zip(inp_data, sub_models)]
+            context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp_data, sub_models)]
         else:
             context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp, sub_models)]
         context_vectors = [context_vectors[-1] + cv for cv in context_vectors[:-1]]
+        context_vectors = [tf.transpose(cv, (1, 0, 2)) for cv in context_vectors]
         h = Concatenate(axis=1)(context_vectors)
+
         # attention model
         qkv = [am(h) for am in qkv_models]
         h_hat = mha(*qkv)
+        h_p = Dense(32, activation=self.activation, kernel_initializer=self.initializer)(h + h_hat)
 
-        hidden_h = Dense(self.hidden_size_lstm * 4, activation=self.activation, kernel_initializer=self.initializer)(h + h_hat)
-        hidden_h = Dropout(0.1, trainable=self.trainable)(hidden_h)
-        hidden_h = Dense(self.hidden_size_lstm, activation=self.activation, kernel_initializer=self.initializer)(hidden_h)
-        h_p = tf.math.tanh(h + h_hat + hidden_h)
-
+        output = tf.reshape(h_p, (-1, self.num_ticker * 32))
         if self.value_flag:
-            h_p = tf.reshape(h_p, (self.batch_size, self.num_ticker,-1))
-            inp_portf = tf.reshape(inp_portf, (self.batch_size, self.num_ticker, 1))
-            h_p = Concatenate(axis=2)([h_p, inp_portf])
-            h_p = tf.reshape(h_p, (self.batch_size, self.num_ticker, self.hidden_size_lstm + 1))
-        output = Dense(self.hidden_size_lstm * 2, activation=self.activation_last, kernel_initializer=self.initializer)(h_p)
+            output = Concatenate(axis=-1)([output, inp_portf])
+        output = Dense(2048, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
+        output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output)
 
         return Model(inp, output)
 
@@ -170,7 +170,7 @@ class pi_network:
         self.alpha = alpha
         self.discount_factor = 0.9
         lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer = SGD(lr_scheduler)
+        self.optimizer = Adam(lr_scheduler)
         self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
         self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
@@ -235,9 +235,9 @@ class q_network:
                             kernel_initializer=self.network2.initializer)
         self.loss = mse
         lr_scheduler1 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer1 = SGD(lr_scheduler1)
+        self.optimizer1 = Adam(lr_scheduler1)
         lr_scheduler2 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer2 = SGD(lr_scheduler2)
+        self.optimizer2 = Adam(lr_scheduler2)
 
     def predict(self, s, a):
         s.append(a)
