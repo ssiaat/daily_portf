@@ -196,5 +196,6 @@ class Agent:
         # 포트폴리오 가치 갱신, 거래세 반영
         self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)
 
+
     def tf2np(self, tensor):
         return tf.make_ndarray(tf.make_tensor_proto(tensor))

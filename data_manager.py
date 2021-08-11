@@ -75,15 +75,13 @@ def get_weights_FFD(d, thres):
 
 w = get_weights_FFD(0.3, 1e-3)
 
-
 def make_data(start_date, end_date, stationary, test):
     global indexes
     start_idx = list(indexes.index).index(start_date)
     end_idx = list(indexes.index).index(end_date)
-    if stationary and start_idx < len(w) - 1:
-        start_idx = len(w) - 1
+    if stationary and not test:
+        start_idx += len(w) - 1
     date_idx = list(indexes.index)[start_idx:end_idx + 1]
-
     training_data_list = []
     training_data_idx = []
     price_df = pd.DataFrame(index=date_idx)
@@ -124,7 +122,7 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
         training_data = data.copy()[COLUMNS_TRAINING_DATA]
         if stationary:
             training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-            if start_idx == len(w) - 1:
+            if stationary and not test:
                 start_idx = 0
             end_idx -= len(w) - 1
         training_data = preprocessing(training_data, start_idx, end_idx, test)

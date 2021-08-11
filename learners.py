@@ -260,7 +260,6 @@ class ReinforcementLearner:
                     for _ in range(fit_iter):
                         self.fit()
                     print('{:,} {:.4f}'.format(self.agent.portfolio_value, (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
-                    print(pi)
 
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
                     return

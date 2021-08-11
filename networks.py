@@ -82,6 +82,7 @@ class DNN(Network):
         if self.value_flag:
             output.append(sub_models[-1](tf.reshape(inp[-1], (-1, self.num_ticker))))
         output = Concatenate()(output)
+        output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
         output = self.residual_layer(output, 256)
         # output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
