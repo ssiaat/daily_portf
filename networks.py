@@ -119,7 +119,7 @@ class AttentionLSTM(Network):
         last_hidden_state = hidden_states[-1]
         attention_score = tf.exp(last_hidden_state * hidden_states)
         total_attention_score = tf.reduce_sum(attention_score)
-        total_attention_score = tf.math.add(total_attention_score, 1e-4)
+        total_attention_score = tf.math.add(total_attention_score, 1e-5)
         attention_score = tf.math.divide(attention_score, total_attention_score)
         context_vector = tf.reduce_sum(attention_score * hidden_states, axis=1)
         return context_vector
@@ -151,9 +151,11 @@ class AttentionLSTM(Network):
         output = tf.reshape(h_p, (-1, self.num_ticker * 32))
         if self.value_flag:
             output = Concatenate(axis=-1)([output, inp_portf])
-        output = Dense(2048, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = Dropout(0.1, trainable=self.trainable)(output)
+        output_t = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output_t)
         output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
+        output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output + output_t)
 
         return Model(inp, output)
 

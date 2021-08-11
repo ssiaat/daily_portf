@@ -22,7 +22,7 @@ end_year = 2015   # 종료 연도
 lr = 1e-3
 net = 'dnn'
 discount_factor = 0.9
-balance = 1e9     # 초기 자본금
+balance = 1e10     # 초기 자본금
 num_epoches = 2
 hold_criter = 0.  # 포트폴리오 변동 줄이기 위해 hold_criter이하면 보유
 
