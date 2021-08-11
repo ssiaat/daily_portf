@@ -112,7 +112,7 @@ class ReinforcementLearner:
             self.target_value_network.load_model(model_path=[self.target_value_network1_path, self.target_value_network2_path])
 
 
-    def init_policy_network(self, activation='relu'):
+    def init_policy_network(self, activation='linear'):
         self.policy_network = pi_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                          num_ticker=self.num_ticker, num_steps=self.num_steps, num_index=self.num_index,
                                          trainable=self.trainable, activation=activation, value_flag=False, alpha=self.alpha)

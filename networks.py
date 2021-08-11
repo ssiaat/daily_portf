@@ -192,6 +192,7 @@ class pi_network:
             pi_action = mu
         else:
             pi_action = mu + tf.random.normal(tf.shape(mu)) * std
+        pi_action = tf.sigmoid(pi_action)
 
         pi_distribution = tfp.distributions.Normal(mu, std)
         log_prob_pi = pi_distribution.log_prob(pi_action)
