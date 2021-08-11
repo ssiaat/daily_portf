@@ -101,7 +101,9 @@ if __name__ == '__main__':
 
     price_data, index_data, index_ppc, training_data = make_data(start_date, end_date, args.stationary, args.test)
     capital = capital.loc[price_data.index]
-
+    print(price_data)
+    print(training_data)
+    exit()
     # 공통 파라미터 설정
     common_params = {'num_features': len(training_data.columns), 'num_index' : len(index_ppc.columns), 'net':net, 'clip' : args.clip,
                      'num_ticker': num_stocks, 'hold_criter': hold_criter, 'num_steps':num_steps, 'lr': lr, 'test': args.test, 'reuse_models': reuse_models,

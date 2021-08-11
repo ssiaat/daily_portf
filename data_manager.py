@@ -15,7 +15,7 @@ capital = pd.read_csv('data/ks200_cap.csv', index_col='date', parse_dates=True)
 capital.columns = [i[1:] for i in capital.columns]
 
 COLUMNS_CHART_DATA = ['date', 'price_mod']
-# 수정주가 - price_mod, price_mod_dividene 두가지로 테스트
+# 수정주가 - price_mod, price_mod_dividend 두가지로 테스트
 COLUMNS_TRAINING_DATA = ['price_mod', 'cap', 'foreigner_rate', 'netbuy_individual', 'netbuy_institution', 'netbuy_foreigner', 'trs_amount']
 
 def set_rebalance_date(start_year, end_year):
@@ -45,6 +45,12 @@ def get_stock_codes(n, rebalance_date):
         stock_codes_yearly.append(temp)
         stock_codes.update(temp)
     return stock_codes_yearly, list(stock_codes)
+
+def get_return_price(data):
+    data['pmd_r'] = data['price_mod_dividend'] / data['price_mod_dividend'].shift(1)
+    data['pmd_r3'] = data['price_mod_dividend'] / data['price_mod_dividend'].shift(60)
+    data['pmd_r12'] = data['price_mod_dividend'] / data['price_mod_dividend'].shift(240)
+    return data[240:]
 
 # parameter 초기화를 he_normal
 # input의 범위도 비슷하게 맞춰줌
@@ -78,10 +84,11 @@ w = get_weights_FFD(0.3, 1e-3)
 
 def make_data(start_date, end_date, stationary, test):
     global indexes
-    start_idx = list(indexes.index).index(start_date)
+    start_idx = max(list(indexes.index).index(start_date) - 240, 0)
     end_idx = list(indexes.index).index(end_date)
-    if stationary and start_idx < len(w) - 1:
-        start_idx = len(w) - 1
+
+    if stationary and start_idx < len(w) - 1 + 240:
+        start_idx = len(w) - 1 + 240
     date_idx = list(indexes.index)[start_idx:end_idx + 1]
     training_data_list = []
     training_data_idx = []
@@ -121,6 +128,7 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     else:
         # 학습 데이터 분리, 전처리
         training_data = data.copy()[COLUMNS_TRAINING_DATA]
+        training_data = get_return_price(training_data)
         if stationary:
             training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
             if stationary and start_idx == len(w) - 1:
