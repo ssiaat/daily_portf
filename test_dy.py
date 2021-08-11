@@ -27,19 +27,33 @@ import pandas as pd
 # print(list(df.index).index(pd.Timestamp('20210630')))
 from datetime import datetime
 
-w = data_manager.get_weights_FFD(0.3, 1e-3)
-fpath = '005930'
-sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
-data = pd.read_sql(sql=sql, con=data_manager.conn, parse_dates=True)
+# w = data_manager.get_weights_FFD(0.3, 1e-3)
+# fpath = '005930'
+# sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
+# data = pd.read_sql(sql=sql, con=data_manager.conn, parse_dates=True)
+#
+# data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
+# data = data.set_index('date').loc[data_del_na.date]
+# data['price_mod_temp'] = data['price_mod'].copy()
+# # data = data_manager.preprocessing(data.copy()[data_manager.COLUMNS_TRAINING_DATA], 0, len(data_manager.indexes)-1, False)
+# data_t = data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+# data_t = data_manager.preprocessing(data_t.copy()[data_manager.COLUMNS_TRAINING_DATA], 0, len(data_t)-1, False)
+#
+# for i in data.columns:
+#     print(data_t[i])
+#     plt.plot(data_t[i])
+#     plt.show()
 
-data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
-data = data.set_index('date').loc[data_del_na.date]
-data['price_mod_temp'] = data['price_mod'].copy()
-# data = data_manager.preprocessing(data.copy()[data_manager.COLUMNS_TRAINING_DATA], 0, len(data_manager.indexes)-1, False)
-data_t = data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-data_t = data_manager.preprocessing(data_t.copy()[data_manager.COLUMNS_TRAINING_DATA], 0, len(data_t)-1, False)
+df = pd.read_csv('./data/capital.csv').set_index('date')
+# m = 1e10
+# for i in df.columns:
+#     if m > min(df[i]):
+#         print(i, min(df[i]), df[i].idxmin())
+#         m = min(df[i])
 
-for i in data.columns:
-    print(data_t[i])
-    plt.plot(data_t[i])
-    plt.show()
+a = [0 for _ in range(30)]
+for i in df.columns:
+    temp = df[i].dropna()
+    if len(temp) > 0:
+        a[len(str(df[i].dropna().iloc[0]))] += 1
+print(a)

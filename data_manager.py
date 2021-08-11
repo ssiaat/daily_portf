@@ -15,7 +15,7 @@ capital = pd.read_csv('data/ks200_cap.csv', index_col='date', parse_dates=True)
 capital.columns = [i[1:] for i in capital.columns]
 
 COLUMNS_CHART_DATA = ['date', 'price_mod']
-COLUMNS_TRAINING_DATA = ['open', 'high', 'low', 'close', 'price_mod', 'volume', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'trs_amount']
+COLUMNS_TRAINING_DATA = ['price_mod', 'cap', 'foreigner_rate', 'netbuy_institution', 'netbuy_foreigner', 'trs_amount']
 
 def set_rebalance_date(start_year, end_year):
     index_temp = indexes.copy()
@@ -80,8 +80,8 @@ def make_data(start_date, end_date, stationary, test):
     global indexes
     start_idx = list(indexes.index).index(start_date)
     end_idx = list(indexes.index).index(end_date)
-    if stationary and not test:
-        start_idx += len(w) - 1
+    if stationary and start_idx < len(w) - 1:
+        start_idx = len(w) - 1
     date_idx = list(indexes.index)[start_idx:end_idx + 1]
 
     training_data_list = []
@@ -125,7 +125,8 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     training_data = data.copy()[COLUMNS_TRAINING_DATA]
     if stationary:
         training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-        start_idx -= len(w) - 1
+        if start_idx == len(w) - 1:
+            start_idx = 0
         end_idx -= len(w) - 1
     training_data = preprocessing(training_data, start_idx, end_idx, test)
     training_data.to_csv(f'data/{fpath}.csv')
