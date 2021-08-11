@@ -100,7 +100,7 @@ def make_data(start_date, end_date, stationary, test):
     # date -> stock code -> data
     training_df = pd.concat(training_data_list, keys=training_data_idx)
     training_df = training_df.swaplevel(0,1).sort_index(level=0)
-    exit()
+
     index_c = indexes.copy()
     indexe_ppc = preprocessing(index_c, start_idx, end_idx, test)
     if stationary:
@@ -111,6 +111,7 @@ def make_data(start_date, end_date, stationary, test):
 
 # load_data_sql 한종목을 읽어오는것.
 def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
+
     # fpath는 stock_code 로 받음
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
     data = pd.read_sql(sql=sql, con=conn, parse_dates=True)
@@ -118,14 +119,13 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
     data['price_mod_temp'] = data['price_mod'].copy()
-    # if stationary:
-    #     training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
-    # else:
-    # 학습 데이터 분리, 전처리
-    training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
     if stationary:
-        training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-        training_data.to_csv(f'./data/{fpath}.csv')
+        training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
+    else:
+    # 학습 데이터 분리, 전처리
+        training_data = preprocessing(data.copy()[COLUMNS_TRAINING_DATA], start_idx, end_idx, test)
+        if stationary:
+            training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
     # index 조정
     temp = pd.DataFrame(index=date_idx)

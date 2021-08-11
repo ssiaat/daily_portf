@@ -211,12 +211,9 @@ class pi_network:
         gradients = tape.gradient(loss_pi, self.network.model.trainable_variables)
         gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
         self.optimizer.apply_gradients(zip(gradients, self.network.model.trainable_variables))
+
         return tf.reduce_mean(loss_pi)
 
-
-    # def act(self, x):
-    #     a, _ = self.predict(x, False, False)
-    #     return a
 
     def save_model(self, model_path):
         self.network.save_model(model_path)
@@ -262,6 +259,7 @@ class q_network:
         self.optimizer1.apply_gradients(zip(gradients1, self.network1.model.trainable_variables))
         gradients2 = tape_pi.gradient(loss_q2, self.network2.model.trainable_variables)
         self.optimizer2.apply_gradients(zip(gradients2, self.network2.model.trainable_variables))
+
         return tf.reduce_mean(loss_q1 + loss_q2)
 
     def save_model(self, model_path):
