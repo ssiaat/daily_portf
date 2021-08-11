@@ -12,7 +12,7 @@ from keras import Input
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-optimizer = Adam
+optimizer = SGD
 
 class Network:
     lock = threading.Lock()
@@ -26,7 +26,6 @@ class Network:
         self.num_steps = num_steps
         self.trainable = trainable
         self.model = None
-        self.optimizer = SGD
         self.initializer = glorot_uniform()
         self.activation = 'relu'
         self.activation_last = activation
