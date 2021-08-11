@@ -73,7 +73,7 @@ def get_weights_FFD(d, thres):
         k+=1
     return np.array(w_list[::-1]).reshape(-1,)
 
-w = get_weights_FFD(0.7, 1e-5)
+w = get_weights_FFD(0.3, 1e-3)
 
 
 def make_data(start_date, end_date, stationary, test):
