@@ -111,7 +111,6 @@ def make_data(start_date, end_date, stationary, test):
 import matplotlib.pyplot as plt
 # load_data_sql 한종목을 읽어오는것.
 def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
-    fpath = '005930'
     # fpath는 stock_code 로 받음
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
     data = pd.read_sql(sql=sql, con=conn, parse_dates=True)
