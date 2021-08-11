@@ -79,9 +79,9 @@ w = get_weights_FFD(0.3, 1e-3)
 def make_data(start_date, end_date, stationary, test):
     global indexes
     start_idx = list(indexes.index).index(start_date)
+    end_idx = list(indexes.index).index(end_date)
     if stationary and not test:
         start_idx += len(w) - 1
-    end_idx = list(indexes.index).index(end_date)
     date_idx = list(indexes.index)[start_idx:end_idx + 1]
 
     training_data_list = []
@@ -125,7 +125,9 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     training_data = data.copy()[COLUMNS_TRAINING_DATA]
     if stationary:
         training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-    training_data = preprocessing(training_data, 0, end_idx, test)
+        start_idx -= len(w) - 1
+        end_idx -= len(w) - 1
+    training_data = preprocessing(training_data, start_idx, end_idx, test)
     training_data.to_csv(f'data/{fpath}.csv')
 
     # index 조정
