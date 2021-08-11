@@ -223,19 +223,19 @@ class ReinforcementLearner:
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pi, logp_pi = self.policy_network.predict(next_sample, self.deterministic, learn=False)
-                if self.clip:
-                    pi = self.agent.similar_with_cap(pi)
 
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                 self.agent.renewal_portfolio_ratio(transaction=False, diff_stock_idx=self.diff_stocks_idx)
 
                 # 오늘 가격으로 변경된 portf_value로 어제 투자에 대한 보상 계산
                 immediate_reward = self.agent.get_reward()
-                if not self.clip:
-                    pi, penalty = self.agent.penalty_diff_bm(pi)
+                if self.clip:
+                    ratio = self.agent.similar_with_cap(pi)
+                else:
+                    ratio, penalty = self.agent.penalty_diff_bm(pi)
                     immediate_reward += penalty
 
-                action, ratio = self.agent.decide_action(pi, self.clip)
+                action, ratio = self.agent.decide_action(ratio, self.clip)
 
 
 
@@ -260,6 +260,7 @@ class ReinforcementLearner:
                     for _ in range(fit_iter):
                         self.fit()
                     print('{:,} {:.4f}'.format(self.agent.portfolio_value, (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
+                    print(pi)
 
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
                     return

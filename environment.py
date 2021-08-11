@@ -26,14 +26,14 @@ class Environment:
 
         self.year = self.date_list[0].year  # test환경에서 year값이 변하면 종목을 변경해줘야함
 
-        self.universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)
-        self.last_universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)
+        self.universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)[:self.num_ticker]
+        self.last_universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)[:self.num_ticker]
 
     def reset(self):
         self.idx = -1
         self.date = None
-        self.universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)
-        self.last_universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)
+        self.universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)[:self.num_ticker]
+        self.last_universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)[:self.num_ticker]
 
     def observe(self):
         if len(self.price_data) > self.idx + self.num_steps:
@@ -84,7 +84,7 @@ class Environment:
     # test시 1년이 지나면 stock code변경
     def update_stock_codes(self):
         self.last_universe = self.universe.copy()
-        today_stock_codes = self.cap_data.loc[self.date].dropna().sort_values(ascending=False).index
+        today_stock_codes = self.cap_data.loc[self.date].dropna().sort_values(ascending=False).index[:self.num_ticker]
         diff_universe = [x for x in today_stock_codes if x not in self.last_universe]
         diff_universe_idx = 0
         ret = None

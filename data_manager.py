@@ -95,7 +95,7 @@ def make_data(start_date, end_date, stationary, test):
         training_data_idx.append(stock_code)
         training_data_list.append(training_data)
         price_df = pd.concat([price_df, price_data], axis=1)
-    exit()
+
     # training_df 는 3차원으로 설정
     # date -> stock code -> data
     training_df = pd.concat(training_data_list, keys=training_data_idx)
@@ -108,7 +108,6 @@ def make_data(start_date, end_date, stationary, test):
 
     return price_df.fillna(0), indexes.loc[price_df.index], indexe_ppc.loc[price_df.index], training_df.fillna(0)
 
-import matplotlib.pyplot as plt
 # load_data_sql 한종목을 읽어오는것.
 def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     # fpath는 stock_code 로 받음
@@ -118,18 +117,18 @@ def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
     data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
     data['price_mod_temp'] = data['price_mod'].copy()
-    # if stationary:
-    #     training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
-    # else:
-    # 학습 데이터 분리, 전처리
-    training_data = data.copy()[COLUMNS_TRAINING_DATA]
     if stationary:
-        training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-        if start_idx == len(w) - 1:
-            start_idx = 0
-        end_idx -= len(w) - 1
-    training_data = preprocessing(training_data, start_idx, end_idx, test)
-    training_data.to_csv(f'data/{fpath}.csv')
+        training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
+    else:
+        # 학습 데이터 분리, 전처리
+        training_data = data.copy()[COLUMNS_TRAINING_DATA]
+        if stationary:
+            training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+            if start_idx == len(w) - 1:
+                start_idx = 0
+            end_idx -= len(w) - 1
+        training_data = preprocessing(training_data, start_idx, end_idx, test)
+
 
     # index 조정
     temp = pd.DataFrame(index=date_idx)
