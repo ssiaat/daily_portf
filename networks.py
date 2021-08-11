@@ -12,7 +12,7 @@ from keras import Input
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-optimizer = SGD
+optimizer = Adam
 
 class Network:
     lock = threading.Lock()
@@ -82,7 +82,6 @@ class DNN(Network):
         if self.value_flag:
             output.append(sub_models[-1](tf.reshape(inp[-1], (-1, self.num_ticker))))
         output = Concatenate()(output)
-        output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
         output = self.residual_layer(output, 256)
         # output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
@@ -111,7 +110,6 @@ class AttentionLSTM(Network):
     # after expand input, calculate hidden state of input sequences
     def mini_model(self):
         model = Sequential()
-        model.add(Dense(64, activation=self.activation, kernel_initializer=self.initializer))
         model.add(LSTM(self.hidden_size_lstm, dropout=0.1, return_sequences=True, stateful=False, kernel_initializer=self.initializer))
         model.add(LayerNormalization(trainable=self.trainable))
         return model
@@ -137,8 +135,6 @@ class AttentionLSTM(Network):
         inp_portf = None
         if self.value_flag:
             inp_portf = inp[-1]
-            # inp_data = [tf.reshape(i, (self.num_steps, self.output_dim)) for i in inp[:-2]]
-            # inp_data.append(tf.reshape(inp[-2], (self.num_steps, self.num_index)))
             inp_data = inp[:-1]
             context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp_data, sub_models)]
         else:
@@ -194,7 +190,6 @@ class pi_network:
         else:
             pi_action = mu + tf.random.normal(tf.shape(mu)) * std
         pi_action = tf.sigmoid(pi_action)
-
         pi_distribution = tfp.distributions.Normal(mu, std)
         log_prob_pi = pi_distribution.log_prob(pi_action)
         log_prob_pi -= (2*(np.log(2) - pi_action - tf.math.softplus(-2*pi_action)))
@@ -258,8 +253,10 @@ class q_network:
             loss_q2 = tf.math.sqrt(self.loss(backup, q2))
 
         gradients1 = tape_q.gradient(loss_q1, self.network1.model.trainable_variables)
+        gradients1, _ = tf.clip_by_global_norm(gradients1, 1.0)
         self.optimizer1.apply_gradients(zip(gradients1, self.network1.model.trainable_variables))
         gradients2 = tape_pi.gradient(loss_q2, self.network2.model.trainable_variables)
+        gradients2, _ = tf.clip_by_global_norm(gradients2, 1.0)
         self.optimizer2.apply_gradients(zip(gradients2, self.network2.model.trainable_variables))
 
         return tf.reduce_mean(loss_q1 + loss_q2)

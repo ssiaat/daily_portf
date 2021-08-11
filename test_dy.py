@@ -44,16 +44,7 @@ from datetime import datetime
 #     plt.plot(data_t[i])
 #     plt.show()
 
-df = pd.read_csv('./data/capital.csv').set_index('date')
-# m = 1e10
-# for i in df.columns:
-#     if m > min(df[i]):
-#         print(i, min(df[i]), df[i].idxmin())
-#         m = min(df[i])
-
-a = [0 for _ in range(30)]
-for i in df.columns:
-    temp = df[i].dropna()
-    if len(temp) > 0:
-        a[len(str(df[i].dropna().iloc[0]))] += 1
-print(a)
+a = data_manager.capital.iloc[-1].dropna().sort_values().values
+pv = a * 1e9
+diff = pv * 0.2
+print(diff[:5])

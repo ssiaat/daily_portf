@@ -207,6 +207,8 @@ class ReinforcementLearner:
         print('Start Learning')
         for epoch in range(num_epoches):
             time_start_epoch = time.time()
+            # 평균 복제율
+            mean_copy = 0.
 
             # 환경, 에이전트, 신경망, 가시화, 메모리 초기화
             self.reset()
@@ -237,6 +239,8 @@ class ReinforcementLearner:
 
                 action, ratio = self.agent.decide_action(ratio, self.clip)
 
+                curr_cap = self.environment.get_cap()
+                mean_copy += tf.reduce_sum(tf.math.abs(curr_cap - ratio) / 2.0 * 100.0)
 
 
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
@@ -259,7 +263,9 @@ class ReinforcementLearner:
                     fit_iter = 3 if len(self.memory_sample_idx) == self.max_sample_len else 1
                     for _ in range(fit_iter):
                         self.fit()
-                    print('{:,} {:.4f}'.format(self.agent.portfolio_value, (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
+                    print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 10.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
+                                                      (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
+                    mean_copy = 0.
 
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
                     return
@@ -369,7 +375,7 @@ class A2CLearner(ReinforcementLearner):
     def calculate_yvalue(self, r, s, next_s, d):
         a1, _ = self.policy_network.predict(next_s)
         a2, logp_a2 = self.policy_network.predict(next_s)
-        q1_pi_targ, q2_pi_targ = self.value_network.predict(next_s.copy(), a2 - a1)
+        q1_pi_targ, q2_pi_targ = self.target_value_network.predict(next_s.copy(), a2 - a1)
         q_pi_targ = tf.math.minimum(q1_pi_targ, q2_pi_targ)
         backup = r + self.discount_factor * (1 - d) * (q_pi_targ - self.alpha * logp_a2)
         return backup
