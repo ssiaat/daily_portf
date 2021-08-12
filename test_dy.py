@@ -44,6 +44,5 @@ from datetime import datetime
 #     plt.plot(data_t[i])
 #     plt.show()
 
-a = data_manager.indexes[['ks200', 'dax']].apply(data_manager.get_return_price, args=(10,))
-# print(data_manager.get_return_price(a, 10))
-print(a)
+a = [1,2,3,4,5]
+print(a.index(0))

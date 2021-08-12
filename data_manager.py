@@ -52,16 +52,15 @@ def get_return_price(data, days):
 
 # parameter 초기화를 he_normal
 # input의 범위도 비슷하게 맞춰줌
-def preprocessing(data, date_idx, test=False):
+def preprocessing(data, start_idx, end_idx, test=False):
     if 'close' in data.columns:
         data['open'] = data['open'] / data['close'] - 1
         data['high'] = data['high'] / data['close'] - 1
         data['low'] = data['low'] / data['close'] - 1
-    for col in COLUMNS_TRAINING_DATA[1:]:
-        max_num = data.loc[date_idx][col].max()
-        min_num = data.loc[date_idx][col].min()
+    for col in COLUMNS_TRAINING_DATA[2:]:
+        max_num = data.iloc[start_idx:end_idx+1][col].max()
+        min_num = data.iloc[start_idx:end_idx+1][col].min()
         if test:
-            start_idx = list(data.index).index(date_idx[0])
             max_num = data.iloc[:start_idx][col].max()
             min_num = data.iloc[:start_idx][col].min()
         if max_num == min_num:
@@ -96,7 +95,7 @@ def make_data(start_date, end_date, stationary, test):
     stock_codes = capital.columns
     for stock_code in tqdm(stock_codes):
         # From local db,. 한종목씩
-        price_data, training_data = load_data_sql(stock_code, date_idx, stationary, test)
+        price_data, training_data = load_data_sql(stock_code, start_idx, end_idx, date_idx, stationary, test)
         training_data_idx.append(stock_code)
         training_data_list.append(training_data)
         price_df = pd.concat([price_df, price_data], axis=1)
@@ -114,7 +113,7 @@ def make_data(start_date, end_date, stationary, test):
     return price_df.fillna(0), indexes.loc[price_df.index], index_ppc.loc[price_df.index], training_df.fillna(0)
 
 # load_data_sql 한종목을 읽어오는것.
-def load_data_sql(fpath, date_idx, stationary, test):
+def load_data_sql(fpath, start_idx, end_idx, date_idx, stationary, test):
     # fpath는 stock_code 로 받음
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
     data = pd.read_sql(sql=sql, con=conn, parse_dates=True)
@@ -130,13 +129,14 @@ def load_data_sql(fpath, date_idx, stationary, test):
     for i in [1, 60, 240]:
         temp = training_data[[price]].apply(get_return_price, args=(i,))
         training_data['pm_r' + str(i//20)] = temp[price]
-    training_data['amihud_illiq'] = training_data['pm_r0'].abs() / training_data['trs_amount']
-    training_data['amihud_illiq'] = training_data['amihud_illiq'].rolling(10).sum() * 1e10
+    training_data['amihud_illiq'] = (training_data['pm_r0'].abs() / training_data['trs_amount']) * 1e10
 
     if stationary:
         training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+        start_idx -= len(w) - 1 + 240
+        end_idx -= len(w) - 1 + 240
 
-    training_data = preprocessing(training_data, date_idx, test)
+    training_data = preprocessing(training_data, start_idx, end_idx, test)
     training_data.drop([price, 'cap'], axis=1, inplace=True)
 
     # index 조정
