@@ -83,6 +83,7 @@ class Agent:
         curr_cap = self.set100(np.where(np.isnan(curr_cap) == True, 0., curr_cap))
         ratio = tf.math.softmax(ratio)
         ratio = self.set100(tf.where(curr_cap == 0., 0., ratio))
+
         penalty = tf.math.abs(curr_cap - ratio) / 2.0 * 1000.0
         print('{:.4f}' .format(tf.reduce_sum(penalty)))
         if tf.reduce_sum(penalty) < 30:
@@ -94,8 +95,9 @@ class Agent:
         curr_cap = np.where(np.isnan(curr_cap), 0., curr_cap)
         curr_price = self.environment.get_price()
         curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap))
-        ratio = tf.math.softmax(ratio)
-        ratio = tf.clip_by_value(ratio, curr_cap * (1 - self.OVER_CAP[1]), curr_cap * (1 + self.OVER_CAP[0]))
+        # ratio = tf.math.softmax(ratio)
+        # ratio = tf.clip_by_value(ratio, curr_cap * (1 - self.OVER_CAP[1]), curr_cap * (1 + self.OVER_CAP[0]))
+        ratio += ratio * self.OVER_CAP[0]
         ratio = self.set100(tf.clip_by_value(ratio, 0, 100))
         return ratio
 
@@ -123,8 +125,8 @@ class Agent:
         if self.hold_criter > 0.:
             ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
-        if clip:
-            ratio = self.similar_with_cap(ratio)
+        # if clip:
+        #     ratio = self.similar_with_cap(ratio)
         action = ratio - self.portfolio_ratio
         return action, ratio
 

@@ -44,7 +44,6 @@ from datetime import datetime
 #     plt.plot(data_t[i])
 #     plt.show()
 
-a = data_manager.capital.iloc[-1].dropna().sort_values().values
-pv = a * 1e9
-diff = pv * 0.2
-print(diff[:5])
+a = data_manager.indexes[['ks200', 'dax']].apply(data_manager.get_return_price, args=(10,))
+# print(data_manager.get_return_price(a, 10))
+print(a)

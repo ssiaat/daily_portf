@@ -112,7 +112,7 @@ class ReinforcementLearner:
             self.target_value_network.load_model(model_path=[self.target_value_network1_path, self.target_value_network2_path])
 
 
-    def init_policy_network(self, activation='linear'):
+    def init_policy_network(self, activation='tanh'):
         self.policy_network = pi_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                          num_ticker=self.num_ticker, num_steps=self.num_steps, num_index=self.num_index,
                                          trainable=self.trainable, activation=activation, value_flag=False, alpha=self.alpha)
@@ -189,7 +189,7 @@ class ReinforcementLearner:
 
 
     def run(self, num_epoches=100, balance=10000000):
-        info = "RL:a2c LR:{lr}".format(lr=self.lr)
+        info = "RL:sac LR:{lr}".format(lr=self.lr)
         with self.lock:
             logging.info(info)
 
@@ -212,7 +212,6 @@ class ReinforcementLearner:
 
             # 환경, 에이전트, 신경망, 가시화, 메모리 초기화
             self.reset()
-
             while True:
                 # 샘플 생성, sample = [sample, sample of index]
                 sample, idx = self.build_sample()

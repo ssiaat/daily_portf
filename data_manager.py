@@ -14,9 +14,10 @@ indexes = pd.read_sql(sql=sql, con=conn).set_index('date').ffill()
 capital = pd.read_csv('data/ks200_cap.csv', index_col='date', parse_dates=True)
 capital.columns = [i[1:] for i in capital.columns]
 
+price = 'price_mod'
 COLUMNS_CHART_DATA = ['date', 'price_mod']
 # 수정주가 - price_mod, price_mod_dividend 두가지로 테스트
-COLUMNS_TRAINING_DATA = ['price_mod', 'cap', 'foreigner_rate', 'netbuy_individual', 'netbuy_institution', 'netbuy_foreigner', 'trs_amount']
+COLUMNS_TRAINING_DATA = [price, 'cap', 'foreigner_rate', 'netbuy_individual', 'netbuy_institution', 'netbuy_foreigner', 'trs_amount']
 
 def set_rebalance_date(start_year, end_year):
     index_temp = indexes.copy()
@@ -46,23 +47,21 @@ def get_stock_codes(n, rebalance_date):
         stock_codes.update(temp)
     return stock_codes_yearly, list(stock_codes)
 
-def get_return_price(data):
-    data['pmd_r'] = data['price_mod_dividend'] / data['price_mod_dividend'].shift(1)
-    data['pmd_r3'] = data['price_mod_dividend'] / data['price_mod_dividend'].shift(60)
-    data['pmd_r12'] = data['price_mod_dividend'] / data['price_mod_dividend'].shift(240)
-    return data[240:]
+def get_return_price(data, days):
+    return (data / data.shift(days))[days:]
 
 # parameter 초기화를 he_normal
 # input의 범위도 비슷하게 맞춰줌
-def preprocessing(data, start_idx, end_idx, test=False):
+def preprocessing(data, date_idx, test=False):
     if 'close' in data.columns:
         data['open'] = data['open'] / data['close'] - 1
         data['high'] = data['high'] / data['close'] - 1
         data['low'] = data['low'] / data['close'] - 1
-    for col in data.columns:
-        max_num = data.iloc[start_idx:end_idx+1][col].max()
-        min_num = data.iloc[start_idx:end_idx+1][col].min()
+    for col in COLUMNS_TRAINING_DATA[1:]:
+        max_num = data.loc[date_idx][col].max()
+        min_num = data.loc[date_idx][col].min()
         if test:
+            start_idx = list(data.index).index(date_idx[0])
             max_num = data.iloc[:start_idx][col].max()
             min_num = data.iloc[:start_idx][col].min()
         if max_num == min_num:
@@ -84,7 +83,7 @@ w = get_weights_FFD(0.3, 1e-3)
 
 def make_data(start_date, end_date, stationary, test):
     global indexes
-    start_idx = max(list(indexes.index).index(start_date) - 240, 0)
+    start_idx = max(list(indexes.index).index(start_date), 240)
     end_idx = list(indexes.index).index(end_date)
 
     if stationary and start_idx < len(w) - 1 + 240:
@@ -97,7 +96,7 @@ def make_data(start_date, end_date, stationary, test):
     stock_codes = capital.columns
     for stock_code in tqdm(stock_codes):
         # From local db,. 한종목씩
-        price_data, training_data = load_data_sql(stock_code, date_idx, start_idx, end_idx, stationary, test)
+        price_data, training_data = load_data_sql(stock_code, date_idx, stationary, test)
         training_data_idx.append(stock_code)
         training_data_list.append(training_data)
         price_df = pd.concat([price_df, price_data], axis=1)
@@ -107,34 +106,38 @@ def make_data(start_date, end_date, stationary, test):
     training_df = pd.concat(training_data_list, keys=training_data_idx)
     training_df = training_df.swaplevel(0,1).sort_index(level=0)
 
-    index_c = indexes.copy()
-    indexe_ppc = preprocessing(index_c, start_idx, end_idx, test)
+    index_ppc = indexes.copy()
+    index_ppc = index_ppc.apply(get_return_price, args=(1,))
     if stationary:
-        indexe_ppc = indexe_ppc.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+        index_ppc = index_ppc.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
 
-    return price_df.fillna(0), indexes.loc[price_df.index], indexe_ppc.loc[price_df.index], training_df.fillna(0)
+    return price_df.fillna(0), indexes.loc[price_df.index], index_ppc.loc[price_df.index], training_df.fillna(0)
 
 # load_data_sql 한종목을 읽어오는것.
-def load_data_sql(fpath, date_idx, start_idx, end_idx, stationary, test):
+def load_data_sql(fpath, date_idx, stationary, test):
     # fpath는 stock_code 로 받음
     sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
     data = pd.read_sql(sql=sql, con=conn, parse_dates=True)
 
-    data_del_na = data.set_index('date')['price_mod'].dropna().reset_index()
+    data_del_na = data.set_index('date')[price].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
-    data['price_mod_temp'] = data['price_mod'].copy()
+    data['price_mod_temp'] = data[price].copy()
+    # if stationary:
+    #     training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
+    # else:
+    # 학습 데이터 분리, 전처리
+    training_data = data.copy()[COLUMNS_TRAINING_DATA]
+    for i in [1, 60, 240]:
+        temp = training_data[[price]].apply(get_return_price, args=(i,))
+        training_data['pm_r' + str(i//20)] = temp[price]
+    training_data['amihud_illiq'] = training_data['pm_r0'].abs() / training_data['trs_amount']
+    training_data['amihud_illiq'] = training_data['amihud_illiq'].rolling(10).sum() * 1e10
+
     if stationary:
-        training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
-    else:
-        # 학습 데이터 분리, 전처리
-        training_data = data.copy()[COLUMNS_TRAINING_DATA]
-        training_data = get_return_price(training_data)
-        if stationary:
-            training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-            if stationary and start_idx == len(w) - 1:
-                start_idx = 0
-            end_idx -= len(w) - 1
-        training_data = preprocessing(training_data, start_idx, end_idx, test)
+        training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+
+    training_data = preprocessing(training_data, date_idx, test)
+    training_data.drop([price, 'cap'], axis=1, inplace=True)
 
     # index 조정
     temp = pd.DataFrame(index=date_idx)
