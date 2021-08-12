@@ -68,8 +68,8 @@ class DNN(Network):
         model = Sequential()
         model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
         model.add(Dropout(0.1, trainable=self.trainable))
-        model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
-        model.add(Dropout(0.1, trainable=self.trainable))
+        # model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
+        # model.add(Dropout(0.1, trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
         model.add(Dropout(0.1, trainable=self.trainable))
         return model
@@ -207,7 +207,6 @@ class pi_network:
             q_pi = tf.math.minimum(q1_pi, q2_pi)
             loss_pi = tf.reduce_mean(self.alpha * logp_pi - q_pi, axis=1)
         gradients = tape.gradient(loss_pi, self.network.model.trainable_variables)
-        gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
         self.optimizer.apply_gradients(zip(gradients, self.network.model.trainable_variables))
 
         return tf.reduce_mean(loss_pi)
@@ -254,10 +253,8 @@ class q_network:
             loss_q2 = tf.math.sqrt(self.loss(backup, q2))
 
         gradients1 = tape_q.gradient(loss_q1, self.network1.model.trainable_variables)
-        gradients1, _ = tf.clip_by_global_norm(gradients1, 1.0)
         self.optimizer1.apply_gradients(zip(gradients1, self.network1.model.trainable_variables))
         gradients2 = tape_pi.gradient(loss_q2, self.network2.model.trainable_variables)
-        gradients2, _ = tf.clip_by_global_norm(gradients2, 1.0)
         self.optimizer2.apply_gradients(zip(gradients2, self.network2.model.trainable_variables))
 
         return tf.reduce_mean(loss_q1 + loss_q2)

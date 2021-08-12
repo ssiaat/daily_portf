@@ -100,7 +100,7 @@ def make_data(start_date, end_date, stationary, test):
         training_data_idx.append(stock_code)
         training_data_list.append(training_data)
         price_df = pd.concat([price_df, price_data], axis=1)
-    exit()
+
     # training_df 는 3차원으로 설정
     # date -> stock code -> data
     training_df = pd.concat(training_data_list, keys=training_data_idx)
@@ -122,23 +122,21 @@ def load_data_sql(fpath, start_idx, end_idx, date_idx, stationary, test):
     data_del_na = data.set_index('date')[price].dropna().reset_index()
     data = data.set_index('date').loc[data_del_na.date]
     data['price_mod_temp'] = data[price].copy()
-    # if stationary:
-    #     training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
-    # else:
-    # 학습 데이터 분리, 전처리
-    training_data = data.copy()[COLUMNS_TRAINING_DATA]
-    for i in [1, 60, 240]:
-        temp = training_data[[price]].apply(get_return_price, args=(i,))
-        training_data['pm_r' + str(i//20)] = temp[price]
-    training_data['amihud_illiq'] = (training_data['pm_r0'].abs() / training_data['trs_amount']) * 1e10
-
     if stationary:
-        training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-        start_idx -= len(w) - 1 + 240
-        end_idx -= len(w) - 1 + 240
-    training_data = preprocessing(training_data, start_idx, end_idx, test)
-    training_data.drop([price, 'cap'], axis=1, inplace=True)
-    training_data.to_csv(f'data/{fpath}.csv')
+        training_data = pd.read_csv(f'./data/{fpath}.csv', index_col='date', parse_dates=True)
+    else:
+        # 학습 데이터 분리, 전처리
+        training_data = data.copy()[COLUMNS_TRAINING_DATA]
+        for i in [1, 60, 240]:
+            temp = training_data[[price]].apply(get_return_price, args=(i,))
+            training_data['pm_r' + str(i//20)] = temp[price]
+        training_data['amihud_illiq'] = (training_data['pm_r0'].abs() / training_data['trs_amount']) * 1e10
+
+        if stationary:
+            training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+            start_idx -= len(w) - 1 + 240
+            end_idx -= len(w) - 1 + 240
+        training_data = preprocessing(training_data, start_idx, end_idx, test)
 
     # index 조정
     temp = pd.DataFrame(index=date_idx)

@@ -23,7 +23,7 @@ lr = 1e-3
 net = 'dnn'
 discount_factor = 0.9
 balance = 1e10     # 초기 자본금
-num_epoches = 2
+num_epoches = 50
 hold_criter = 0.  # 포트폴리오 변동 줄이기 위해 hold_criter이하면 보유
 
 value_network1_name = None

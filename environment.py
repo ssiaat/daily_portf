@@ -26,14 +26,14 @@ class Environment:
 
         self.year = self.date_list[0].year  # test환경에서 year값이 변하면 종목을 변경해줘야함
 
-        self.universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)[:self.num_ticker]
-        self.last_universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)[:self.num_ticker]
+        self.universe = list(self.cap_data.iloc[0].dropna().index)[:self.num_ticker]
+        self.last_universe = list(self.cap_data.iloc[0].dropna().index)[:self.num_ticker]
 
     def reset(self):
         self.idx = -1
         self.date = None
-        self.universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)[:self.num_ticker]
-        self.last_universe = list(self.cap_data.iloc[0].dropna().sort_values(ascending=False).index)[:self.num_ticker]
+        self.universe = list(self.cap_data.iloc[0].dropna().index)[:self.num_ticker]
+        self.last_universe = list(self.cap_data.iloc[0].dropna().index)[:self.num_ticker]
 
     def observe(self):
         if len(self.price_data) > self.idx + self.num_steps:
@@ -46,6 +46,22 @@ class Environment:
             return diff_stock_codes, self.idx
         return None, None
 
+    # test시 1년이 지나면 stock code변경
+    def update_stock_codes(self):
+        self.last_universe = self.universe.copy()
+        today_stock_codes = self.cap_data.loc[self.date].dropna().index[:self.num_ticker]
+        diff_universe = [x for x in today_stock_codes if x not in self.last_universe]
+        diff_universe_idx = 0
+        ret = None
+        if len(diff_universe) != 0:
+            ret = []
+            for i, x in enumerate(self.last_universe):
+                if x not in today_stock_codes:
+                    self.universe[i] = diff_universe[diff_universe_idx]
+                    diff_universe_idx += 1
+                    ret.append(i)
+        return ret
+
     def get_price(self):
         if self.observe_price is not None:
             return self.observe_price.values.reshape(-1,)
@@ -57,7 +73,7 @@ class Environment:
 
     def get_cap(self):
         if self.observe_cap is not None:
-            return self.observe_cap.values.reshape(-1,).astype(np.float32)
+            return self.observe_cap.fillna(0).values.reshape(-1,).astype(np.float32)
         return None
 
     def get_ks(self):
@@ -81,18 +97,3 @@ class Environment:
         next_sample = np.split(sample, self.num_ticker)
         return next_sample
 
-    # test시 1년이 지나면 stock code변경
-    def update_stock_codes(self):
-        self.last_universe = self.universe.copy()
-        today_stock_codes = self.cap_data.loc[self.date].dropna().sort_values(ascending=False).index[:self.num_ticker]
-        diff_universe = [x for x in today_stock_codes if x not in self.last_universe]
-        diff_universe_idx = 0
-        ret = None
-        if len(diff_universe) != 0:
-            ret = []
-            for i, x in enumerate(self.last_universe):
-                if x not in today_stock_codes:
-                    self.universe[i] = diff_universe[diff_universe_idx]
-                    diff_universe_idx += 1
-                    ret.append(i)
-        return ret

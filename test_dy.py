@@ -1,11 +1,11 @@
 import data_manager
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
-
-from statsmodels.tsa.stattools import adfuller
-import pandas as pd
+#
+# from statsmodels.tsa.stattools import adfuller
+# import pandas as pd
 # import os
-# import tensorflow as tf
+import tensorflow as tf
 # out = pd.DataFrame(columns=['adfStat', 'pVal', 'lags', 'nObs', '95%conf', 'corr'])
 # fpath = '005930'
 # sql = f"SELECT * FROM `{fpath}` ORDER BY `{fpath}`.date ASC;"
@@ -43,6 +43,12 @@ from datetime import datetime
 #     print(data_t[i])
 #     plt.plot(data_t[i])
 #     plt.show()
+# for i in range(len(data_manager.capital.index)):
+#     if len(data_manager.capital.iloc[i].dropna()) != 200:
+#         print(i, len(data_manager.capital.iloc[i].dropna()))
 
-a = [1,2,3,4,5]
-print(a.index(0))
+a = data_manager.capital.iloc[483].dropna().index
+b = data_manager.capital.iloc[484].dropna().index
+c = data_manager.capital.iloc[485].dropna().index
+
+print(data_manager.capital.iloc[483]['002860'])

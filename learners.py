@@ -112,7 +112,7 @@ class ReinforcementLearner:
             self.target_value_network.load_model(model_path=[self.target_value_network1_path, self.target_value_network2_path])
 
 
-    def init_policy_network(self, activation='tanh'):
+    def init_policy_network(self, activation='sigmoid'):
         self.policy_network = pi_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                          num_ticker=self.num_ticker, num_steps=self.num_steps, num_index=self.num_index,
                                          trainable=self.trainable, activation=activation, value_flag=False, alpha=self.alpha)
@@ -178,7 +178,7 @@ class ReinforcementLearner:
     def fit(self,finished=False):
         # 배치 학습 데이터 생성 및 신경망 갱신
         value_loss, policy_loss = self.update_networks(finished)
-        print('{:.4f} {:.4f}' .format(policy_loss, value_loss))
+        # print('{:.4f} {:.4f}' .format(policy_loss, value_loss))
         self.value_loss += value_loss
         self.policy_loss += policy_loss
         self.learning_cnt += 1
@@ -238,14 +238,13 @@ class ReinforcementLearner:
 
                 action, ratio = self.agent.decide_action(ratio, self.clip)
 
-                curr_cap = self.environment.get_cap()
-                mean_copy += tf.reduce_sum(tf.math.abs(curr_cap - ratio) / 2.0 * 100.0)
-
-
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
                 self.agent.act(ratio, self.diff_stocks_idx)
 
                 self.diff_stocks_idx = None
+
+                curr_cap = self.environment.get_cap()
+                mean_copy += tf.reduce_sum(tf.math.abs(curr_cap - self.agent.portfolio_ratio) / 2.0 * 100.0)
 
                 # 행동 및 행동에 대한 결과를 기억
                 self.memory_sample_idx.append(idx)
@@ -255,7 +254,6 @@ class ReinforcementLearner:
 
                 # 반복에 대한 정보 갱신
                 self.itr_cnt += 1
-
                 if self.itr_cnt % 10 == 0:
                     if self.itr_cnt == 10:
                         _ = self.memory_sample_idx.popleft()
@@ -265,7 +263,6 @@ class ReinforcementLearner:
                     print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 10.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
                                                       (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
                     mean_copy = 0.
-
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
                     return
 
