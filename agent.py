@@ -7,7 +7,7 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = [0.2, 0.2]
+    OVER_CAP = [0.6, 0.6]
 
     # 행동
     ACTION_BUY = 2  # 매수
@@ -81,10 +81,10 @@ class Agent:
     def penalty_diff_bm(self, ratio):
         curr_cap = self.environment.get_cap()
         curr_cap = self.set100(np.where(np.isnan(curr_cap) == True, 0., curr_cap))
-        ratio = tf.math.softmax(ratio)
+        # ratio = tf.math.softmax(ratio)
         ratio = self.set100(tf.where(curr_cap == 0., 0., ratio))
 
-        penalty = tf.math.abs(curr_cap - ratio) / 2.0 * 1000.0
+        penalty = tf.math.abs(curr_cap - ratio) / 2.0 * 100.0
         print('{:.4f}' .format(tf.reduce_sum(penalty)))
         if tf.reduce_sum(penalty) < 30:
             penalty = 0.
@@ -96,8 +96,8 @@ class Agent:
         curr_price = self.environment.get_price()
         curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap))
         # ratio = tf.math.softmax(ratio)
-        ratio = tf.clip_by_value(ratio, curr_cap * (1 - self.OVER_CAP[1]), curr_cap * (1 + self.OVER_CAP[0]))
-        # ratio = (1 + ratio * self.OVER_CAP[0]) * curr_cap
+        # ratio = tf.clip_by_value(ratio, curr_cap * (1 - self.OVER_CAP[1]), curr_cap * (1 + self.OVER_CAP[0]))
+        ratio = (1 + ratio * self.OVER_CAP[0]) * curr_cap
         ratio = self.set100(ratio)
         return ratio
 
@@ -125,8 +125,8 @@ class Agent:
         if self.hold_criter > 0.:
             ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
-        if clip:
-            ratio = self.similar_with_cap(ratio)
+        # if clip:
+        #     ratio = self.similar_with_cap(ratio)
         action = ratio - self.portfolio_ratio
         return action, ratio
 

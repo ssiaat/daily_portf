@@ -112,7 +112,7 @@ class ReinforcementLearner:
             self.target_value_network.load_model(model_path=[self.target_value_network1_path, self.target_value_network2_path])
 
 
-    def init_policy_network(self, activation='sigmoid'):
+    def init_policy_network(self, activation='tanh'):
         self.policy_network = pi_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                          num_ticker=self.num_ticker, num_steps=self.num_steps, num_index=self.num_index,
                                          trainable=self.trainable, activation=activation, value_flag=False, alpha=self.alpha)
@@ -125,6 +125,10 @@ class ReinforcementLearner:
 
         # 에이전트 초기화
         self.agent.reset()
+        ratio = self.environment.cap_data.iloc[0].dropna().values
+        print(ratio)
+        print(len(ratio))
+
 
         # 메모리 초기화
         self.memory_sample_idx = deque(maxlen=self.max_sample_len)
@@ -159,7 +163,7 @@ class ReinforcementLearner:
     def update_networks(self, finished=False):
         s, a, r, last_s, next_s, d = self.get_batch(finished)
         # q loss
-        backup = self.calculate_yvalue(r, s, next_s, d)
+        backup = tf.stop_gradient(self.calculate_yvalue(r, s, next_s, d))
         value_loss = self.value_network.learn(s.copy(), a, backup)
         policy_loss = self.policy_network.learn(s, last_s, self.value_network)
 
@@ -215,6 +219,7 @@ class ReinforcementLearner:
             while True:
                 # 샘플 생성, sample = [sample, sample of index]
                 sample, idx = self.build_sample()
+
                 if sample is None:
                     break
                 if self.diff_stocks_idx:
@@ -224,7 +229,6 @@ class ReinforcementLearner:
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pi, logp_pi = self.policy_network.predict(next_sample, self.deterministic, learn=False)
-
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                 self.agent.renewal_portfolio_ratio(transaction=False, diff_stock_idx=self.diff_stocks_idx)
 

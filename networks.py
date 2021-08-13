@@ -5,7 +5,7 @@ print(f'Keras Backend : {os.environ["KERAS_BACKEND"]}')
 
 from keras.models import Model, Sequential
 from keras.layers import Dense, Dropout, LSTM, LayerNormalization, Concatenate, MultiHeadAttention
-from tensorflow.keras.initializers import glorot_uniform
+from tensorflow.keras.initializers import glorot_uniform, glorot_normal
 from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.metrics import mean_squared_error as mse
 from keras import Input
@@ -26,7 +26,7 @@ class Network:
         self.num_steps = num_steps
         self.trainable = trainable
         self.model = None
-        self.initializer = glorot_uniform()
+        self.initializer = glorot_normal()
         self.activation = 'relu'
         self.activation_last = activation
         self.value_flag = value_flag
@@ -170,8 +170,7 @@ class pi_network:
 
         self.alpha = alpha
         self.discount_factor = 0.9
-        lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer = optimizer(lr_scheduler)
+        self.optimizer = optimizer(lr)
         self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
         self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
@@ -179,7 +178,7 @@ class pi_network:
     def predict(self, s, deterministic=False, learn=True):
         output = self.network.model(s)
         mu = tf.reshape(self.mu_layer(output), (-1, self.network.num_ticker))
-        log_std = tf.reshape(self.log_std_layer(output), (-1, self.network.num_ticker))
+        log_std = tf.reshape(self.log_std_layer(output), (-1, self.network.num_ticker)) * 2
         log_std = tf.clip_by_value(log_std, LOG_STD_MIN, LOG_STD_MAX)
         if not learn:
             mu = tf.squeeze(mu)
@@ -190,10 +189,10 @@ class pi_network:
             pi_action = mu
         else:
             pi_action = mu + tf.random.normal(tf.shape(mu)) * std
-        pi_action = tf.sigmoid(pi_action)
+        # pi_action = tf.sigmoid(pi_action)
         pi_distribution = tfp.distributions.Normal(mu, std)
         log_prob_pi = pi_distribution.log_prob(pi_action)
-        log_prob_pi -= (2*(np.log(2) - pi_action - tf.math.softplus(-2*pi_action)))
+        log_prob_pi -= (2 * (np.log(2) - pi_action - tf.math.softplus(-2 * pi_action)))
 
         return pi_action, log_prob_pi
 
@@ -231,10 +230,8 @@ class q_network:
         self.layer2 = Dense(self.network2.output_dim, activation=self.network2.activation_last,
                             kernel_initializer=self.network2.initializer)
         self.loss = mse
-        lr_scheduler1 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer1 = optimizer(lr_scheduler1)
-        lr_scheduler2 = tf.keras.optimizers.schedules.ExponentialDecay(lr, 500, 0.96, True)
-        self.optimizer2 = optimizer(lr_scheduler2)
+        self.optimizer1 = optimizer(lr)
+        self.optimizer2 = optimizer(lr)
 
     def predict(self, s, a):
         s.append(a)
