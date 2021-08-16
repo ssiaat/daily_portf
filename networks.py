@@ -31,9 +31,9 @@ class Network:
         self.activation_last = activation
         self.value_flag = value_flag
         if self.value_flag:
-            self.last_idx = -2
+            self.last_idx = -3
         else:
-            self.last_idx = -1
+            self.last_idx = -2
         self.batch_size = batch_size
 
     def save_model(self, model_path):
@@ -51,8 +51,9 @@ class DNN(Network):
         # 마지막 input은 policy : index, value: action
         inp = [Input(shape=(None, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input(shape=(None, self.num_index)))
+        inp.append(Input(shape=(self.num_ticker,)))
         if self.value_flag:
-            inp.append(Input(shape=(None, self.num_ticker)))
+            inp.append(Input(shape=(self.num_ticker,)))
         self.model = self.get_network(inp, sub_models)
 
     def residual_layer(self, inp, hidden_size):
@@ -75,17 +76,17 @@ class DNN(Network):
         return model
 
     def get_network(self, inp, sub_models):
-
-        output = [m(tf.reshape(i, (-1, self.input_dim))) for i,m in zip(inp[:self.last_idx], sub_models[:self.last_idx])]
-        output.append(sub_models[self.last_idx](tf.reshape(inp[self.last_idx], (-1, self.num_index))))
+        output = [tf.squeeze(m(i), axis=-2) for i, m in zip(inp[:self.last_idx], sub_models[:self.last_idx])]
+        output.append(tf.squeeze(sub_models[self.last_idx](inp[self.last_idx]), axis=-2))
+        output.append(sub_models[self.last_idx+1](inp[self.last_idx+1]))
         if self.value_flag:
-            output.append(sub_models[-1](tf.reshape(inp[-1], (-1, self.num_ticker))))
+            output.append(sub_models[-1](inp[-1]))
         output = Concatenate()(output)
+        output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
-        output = self.residual_layer(output, 256)
         # output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
         # output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = Dense(128, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
 
 # refer to paper DTML(jaemin yoo)
@@ -99,6 +100,7 @@ class AttentionLSTM(Network):
         # 마지막 input은 index
         inp = [Input((self.num_steps, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input((self.num_steps, self.num_index)))
+        inp.append(Input((self.num_ticker,)))
         if self.value_flag:
             inp.append(Input(shape=(self.num_ticker,)))
         sub_models = [self.mini_model() for _ in range(self.num_ticker + 1)]
@@ -131,13 +133,12 @@ class AttentionLSTM(Network):
         return model
 
     def get_network(self, inp, sub_models, qkv_models, mha):
-        inp_portf = None
+        inp_action = None
+        inp_portf = inp[self.last_idx+1]
+        inp_data = inp[:self.last_idx+1]
         if self.value_flag:
-            inp_portf = inp[-1]
-            inp_data = inp[:-1]
-            context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp_data, sub_models)]
-        else:
-            context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp, sub_models)]
+            inp_action = inp[-1]
+        context_vectors = [tf.convert_to_tensor([self.get_attention_score(m(i))]) for i, m in zip(inp_data, sub_models)]
         context_vectors = [context_vectors[-1] + cv for cv in context_vectors[:-1]]
         context_vectors = [tf.transpose(cv, (1, 0, 2)) for cv in context_vectors]
         h = Concatenate(axis=1)(context_vectors)
@@ -149,7 +150,10 @@ class AttentionLSTM(Network):
 
         output = tf.reshape(h_p, (-1, self.num_ticker * 32))
         if self.value_flag:
-            output = Concatenate(axis=-1)([output, inp_portf])
+            output = [output, inp_portf, inp_action]
+        else:
+            output = [output, inp_portf]
+        output = Concatenate(axis=-1)(output)
         output_t = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dropout(0.1, trainable=self.trainable)(output_t)
         output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output)

@@ -125,10 +125,12 @@ class ReinforcementLearner:
 
         # 에이전트 초기화
         self.agent.reset()
-        ratio = self.environment.cap_data.iloc[0].dropna().values
-        print(ratio)
-        print(len(ratio))
+        _ = self.environment.observe()
+        ratio = tf.cast(self.environment.get_cap(), tf.float32)
+        self.agent.act(ratio)
+        self.agent.balance += self.agent.initial_balance - self.agent.portfolio_value
 
+        self.environment.reset()
 
         # 메모리 초기화
         self.memory_sample_idx = deque(maxlen=self.max_sample_len)
@@ -226,9 +228,11 @@ class ReinforcementLearner:
                     print(f'change universe  {len(self.diff_stocks_idx)}  {self.price_data.index[self.environment.idx]}')
                 next_sample = self.environment.transform_sample(sample[0])
                 next_sample.append(np.array([sample[1]]))
+                next_sample.append(np.array([self.agent.portfolio_ratio]))
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
                 pi, logp_pi = self.policy_network.predict(next_sample, self.deterministic, learn=False)
+
                 # 포트폴리오 가치를 오늘 가격 반영해서 갱신
                 self.agent.renewal_portfolio_ratio(transaction=False, diff_stock_idx=self.diff_stocks_idx)
 
@@ -255,6 +259,7 @@ class ReinforcementLearner:
                 self.memory_action.append(action)
                 self.memory_reward.append(immediate_reward)
                 self.memory_pv.append(self.agent.last_portfolio_value)  # last는 어제 투자한 portf를 오늘 종가로 평가한 것
+                self.memory_pr.append(self.agent.last_portfolio_ratio)
 
                 # 반복에 대한 정보 갱신
                 self.itr_cnt += 1
@@ -339,11 +344,14 @@ class A2CLearner(ReinforcementLearner):
 
         # 행동에 대한 보상은 다음날 알 수 있음
         s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
-        s_index = np.zeros((self.batch_size, 1, 1, self.num_steps, self.num_index))
+        s_index = np.zeros((self.batch_size, 1, self.num_steps, self.num_index))
+        portf_state = np.zeros((self.batch_size, self.num_ticker))
         next_s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
-        next_s_index = np.zeros((self.batch_size, 1, 1, self.num_steps, self.num_index))
+        next_s_index = np.zeros((self.batch_size,  1, self.num_steps, self.num_index))
+        portf_next_state = np.zeros((self.batch_size, self.num_ticker))
         last_s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
-        last_s_index = np.zeros((self.batch_size, 1, 1, self.num_steps, self.num_index))
+        last_s_index = np.zeros((self.batch_size, 1, self.num_steps, self.num_index))
+        portf_last_state = np.zeros((self.batch_size, self.num_ticker))
         action = np.zeros((self.batch_size, self.num_ticker))
         reward = np.zeros((self.batch_size, self.num_ticker))
         d = np.zeros((self.batch_size, 1))
@@ -351,12 +359,15 @@ class A2CLearner(ReinforcementLearner):
             sample = self.environment.get_training_data(idx)
             s[i] = self.environment.transform_sample(sample[0])
             s_index[i] = np.array([sample[1]])
+            portf_state[i] = np.array(self.memory_pr[idx])
             sample = self.environment.get_training_data(idx + 1)
             next_s[i] = self.environment.transform_sample(sample[0])
             next_s_index[i] = np.array([sample[1]])
+            portf_next_state[i] = np.array([self.memory_pr[idx + 1]])
             sample = self.environment.get_training_data(idx - 1)
             last_s[i] = self.environment.transform_sample(sample[0])
             last_s_index[i] = np.array([sample[1]])
+            portf_last_state[i] = np.array(self.memory_pr[idx - 1])
             action[i] = np.array(self.memory_action[idx])
             reward[i] = self.memory_reward[idx+1]
             if idx == len(self.price_data) - 1:
@@ -364,11 +375,14 @@ class A2CLearner(ReinforcementLearner):
 
         # input 형태로 변경
         s = list(np.squeeze(s.swapaxes(0,1), axis=2))
-        s.append(*np.squeeze(s_index.swapaxes(0,1), axis=2))
+        s.append(np.squeeze(s_index, axis=1))
+        s.append(portf_state)
         next_s = list(np.squeeze(next_s.swapaxes(0, 1), axis=2))
-        next_s.append(*np.squeeze(next_s_index.swapaxes(0, 1), axis=2))
+        next_s.append(np.squeeze(next_s_index, axis=1))
+        next_s.append(portf_next_state)
         last_s = list(np.squeeze(last_s.swapaxes(0, 1), axis=2))
-        last_s.append(*np.squeeze(last_s_index.swapaxes(0, 1), axis=2))
+        last_s.append(np.squeeze(last_s_index, axis=1))
+        last_s.append(portf_last_state)
 
         return s, action, reward, last_s, next_s, d
 

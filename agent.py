@@ -106,13 +106,14 @@ class Agent:
             curr_price = self.environment.get_price()
             if diff_stock_idx is not None:
                 curr_price = self.environment.get_price_last_portf()
+
             # 상장폐지 처리, 다음 종가로 갱신할 때 가격, 비율 정보 모두 없으면 상폐로 간주하고 종목 가치만큼 차감
             if not transaction:
                 curr_cap = self.environment.get_cap()
                 cap_nan_check = tf.cast(~tf.math.is_nan(curr_cap), tf.float32)
                 self.num_stocks = tf.where((curr_price + cap_nan_check) == 0., 0., self.num_stocks)
                 
-            self.portfolio_value_each = self.num_stocks * curr_price
+            self.portfolio_value_each = tf.cast(self.num_stocks * curr_price, tf.float32)
             if transaction:
                 # 매도 수수료는 balance에 반영 -> 매수만 반영
                 self.portfolio_value_each -= tf.math.ceil(buy_value_each * self.TRADING_TAX[0])
@@ -134,7 +135,7 @@ class Agent:
         curr_price = self.environment.get_price()
         if diff_stocks_idx is not None:
             curr_price = self.environment.get_price_last_portf()
-        sell_trading_unit = tf.math.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0, 10) * \
+        sell_trading_unit = tf.math.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0., 10.) * \
                                      self.portfolio_value_each / np.where(curr_price == 0., 1., curr_price))
 
         # 변경 종목 idx중 기존 종목 모두 매도
@@ -147,7 +148,7 @@ class Agent:
         sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
         sell_trading_value = tf.math.ceil(curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1]))
 
-        buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0, 10)
+        buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0., 10.)
         curr_price = self.environment.get_price()
 
         # 새로운 종목 모두 매수
@@ -169,10 +170,10 @@ class Agent:
 
         if self.profitloss > 0:
             self.win_cnt += 1
-
+        # self.portfolio_ratio = tf.cast(self.portfolio_ratio, tf.float32)
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
         self.immediate_reward = (self.profitloss - self.last_profitloss) * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio)
-        return tf.cast(self.immediate_reward, tf.float32)
+        return self.immediate_reward
 
     def act(self, ratio, diff_stocks_idx=None):
         curr_price = self.environment.get_price()
