@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 
 
@@ -31,43 +32,39 @@ class Agent:
         # Agent 클래스의 속성
         self.initial_balance = 0  # 초기 자본금
         self.balance = 0  # 현재 현금 잔고
-        self.num_stocks = np.zeros((self.num_ticker,))  # 보유 주식 수
-        self.portfolio_ratio = np.zeros((self.num_ticker,))
+        self.num_stocks = pd.DataFrame(index=self.environment.price_data.index, columns=self.environment.price_data.columns).fillna(0)  # 보유 주식 수
+        self.portfolio_ratio = pd.DataFrame(index=self.environment.price_data.index, columns=self.environment.price_data.columns)
         self.last_portfolio_ratio = np.zeros((self.num_ticker,))
 
         # 포트폴리오 가치: balance + num_stocks * {현재 주식 가격}
         self.portfolio_value = 0 
         self.last_portfolio_value = 0  # 직전 학습 시점의 PV
         # 종목마다 포트폴리오 가치 (balance고려 안됨)
-        self.portfolio_value_each = np.zeros((self.num_ticker,))
+        self.portfolio_value_each = pd.DataFrame(index=self.environment.price_data.index, columns=self.environment.price_data.columns)
 
-        self.num_buy = np.zeros((self.num_ticker,))  # 매수 횟수
-        self.num_sell = np.zeros((self.num_ticker,))  # 매도 횟수
-        self.num_hold = np.zeros((self.num_ticker,))  # 홀딩 횟수
         self.immediate_reward = 0  # 즉시 보상
         self.profitloss = 0
         self.last_profitloss = 0
 
         self.base_ks = self.environment.get_ks_to_reset()  # 기준 시점의 ks200지수, 초기값은 첫 ks200지수
         self.win_cnt = 0
+        self.idx = -1
 
     def reset(self):
         self.balance = self.initial_balance
-        self.num_stocks = np.zeros((self.num_ticker,))
-        self.portfolio_ratio = np.zeros((self.num_ticker,))
+        self.num_stocks = pd.DataFrame(index=self.environment.price_data.index, columns=self.environment.price_data.columns).fillna(0)
+        self.portfolio_ratio = pd.DataFrame(index=self.environment.price_data.index, columns=self.environment.price_data.columns)
         self.portfolio_value = self.initial_balance
-        self.portfolio_value_each = np.zeros((self.num_ticker,))
+        self.portfolio_value_each = pd.DataFrame(index=self.environment.price_data.index, columns=self.environment.price_data.columns)
         self.last_portfolio_ratio = np.zeros((self.num_ticker,))
         self.last_portfolio_value = self.initial_balance
         self.last_profitloss = 0
 
-        self.num_buy = np.zeros((self.num_ticker,))
-        self.num_sell = np.zeros((self.num_ticker,))
-        self.num_hold = np.zeros((self.num_ticker,))
         self.immediate_reward = 0
 
         self.base_ks = self.environment.get_ks_to_reset()
         self.win_cnt = 0
+        self.idx = self.environment.idx
 
     def set_balance(self, balance):
         self.initial_balance = balance
@@ -102,23 +99,22 @@ class Agent:
         return ratio
 
     def renewal_portfolio_ratio(self, transaction, buy_value_each=None, diff_stock_idx=None):
-        if tf.reduce_sum(self.num_stocks) > 0:
-            curr_price = self.environment.get_price()
-            if diff_stock_idx is not None:
-                curr_price = self.environment.get_price_last_portf()
+        curr_price = self.environment.get_price()
+        if diff_stock_idx is not None:
+            curr_price = self.environment.get_price_last_portf()
 
-            # 상장폐지 처리, 다음 종가로 갱신할 때 가격, 비율 정보 모두 없으면 상폐로 간주하고 종목 가치만큼 차감
-            if not transaction:
-                curr_cap = self.environment.get_cap()
-                cap_nan_check = tf.cast(~tf.math.is_nan(curr_cap), tf.float32)
-                self.num_stocks = tf.where((curr_price + cap_nan_check) == 0., 0., self.num_stocks)
-                
-            self.portfolio_value_each = tf.cast(self.num_stocks * curr_price, tf.float32)
-            if transaction:
-                # 매도 수수료는 balance에 반영 -> 매수만 반영
-                self.portfolio_value_each -= tf.math.ceil(buy_value_each * self.TRADING_TAX[0])
-            self.portfolio_ratio = self.set100(self.portfolio_value_each)
-            self.portfolio_value = tf.cast(tf.reduce_sum(self.portfolio_value_each), tf.float32) + self.balance
+        # 상장폐지 처리, 다음 종가로 갱신할 때 가격, 비율 정보 모두 없으면 상폐로 간주하고 종목 가치만큼 차감
+        if not transaction:
+            curr_cap = self.environment.get_cap()
+            cap_nan_check = tf.cast(~tf.math.is_nan(curr_cap), tf.float32)
+            self.num_stocks = tf.where((curr_price + cap_nan_check) == 0., 0., self.num_stocks)
+
+        self.portfolio_value_each = tf.cast(self.num_stocks * curr_price, tf.float32)
+        if transaction:
+            # 매도 수수료는 balance에 반영 -> 매수만 반영
+            self.portfolio_value_each -= tf.math.ceil(buy_value_each * self.TRADING_TAX[0])
+        self.portfolio_ratio = self.set100(self.portfolio_value_each)
+        self.portfolio_value = tf.cast(tf.reduce_sum(self.portfolio_value_each), tf.float32) + self.balance
 
 
     def decide_action(self, ratio, clip):
@@ -131,18 +127,18 @@ class Agent:
         action = ratio - self.portfolio_ratio
         return action, ratio
 
-    def decide_trading_unit(self, ratio, diff_stocks_idx=None):
+    def decide_trading_unit(self, ratio, diff_stocks=None):
         curr_price = self.environment.get_price()
-        if diff_stocks_idx is not None:
+        if diff_stocks is not None:
             curr_price = self.environment.get_price_last_portf()
         sell_trading_unit = tf.math.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0., 10.) * \
                                      self.portfolio_value_each / np.where(curr_price == 0., 1., curr_price))
 
         # 변경 종목 idx중 기존 종목 모두 매도
-        if diff_stocks_idx is not None:
+        if diff_stocks is not None:
             if tf.is_tensor(sell_trading_unit):
                 sell_trading_unit = tf.make_ndarray(tf.make_tensor_proto(sell_trading_unit))
-            sell_trading_unit[diff_stocks_idx] = tf.gather(self.num_stocks, diff_stocks_idx)
+            sell_trading_unit[diff_stocks] = tf.gather(self.num_stocks, diff_stocks)
 
         # 거래정지 상태인데 거래하는 경우 방지
         sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
@@ -152,10 +148,10 @@ class Agent:
         curr_price = self.environment.get_price()
 
         # 새로운 종목 모두 매수
-        if diff_stocks_idx is not None:
+        if diff_stocks is not None:
             if tf.is_tensor(buy_trading_ratio):
                 buy_trading_ratio = tf.make_ndarray(tf.make_tensor_proto(buy_trading_ratio))
-            buy_trading_ratio[diff_stocks_idx] = tf.gather(ratio, diff_stocks_idx)
+            buy_trading_ratio[diff_stocks] = tf.gather(ratio, diff_stocks)
 
         # 거래정지 상태인데 거래하는 경우 방지
         buy_trading_unit = tf.math.floor(self.set100(tf.where(curr_price == 0., 0., buy_trading_ratio)) * \
@@ -185,7 +181,7 @@ class Agent:
             sell_value_each = sell_unit * curr_price
         else:
             sell_value_each = sell_unit * self.environment.get_price_last_portf()
-        self.num_stocks += buy_unit - sell_unit
+        self.num_stocks.iloc[self.environment.idx] = self.num_stocks.iloc[self.environment.idx-1] + buy_unit - sell_unit
 
         # 매도 수수료는 바로 반영, 매수 수수료는 장부가치에 반영
         buy_value = tf.cast(tf.reduce_sum(buy_value_each), dtype=tf.float32)

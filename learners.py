@@ -221,6 +221,7 @@ class ReinforcementLearner:
             while True:
                 # 샘플 생성, sample = [sample, sample of index]
                 sample, idx = self.build_sample()
+                self.agent.idx = self.environment.idx
 
                 if sample is None:
                     break

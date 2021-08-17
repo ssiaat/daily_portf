@@ -51,16 +51,10 @@ class Environment:
         self.last_universe = self.universe.copy()
         today_stock_codes = self.cap_data.loc[self.date].dropna().index[:self.num_ticker]
         diff_universe = [x for x in today_stock_codes if x not in self.last_universe]
-        diff_universe_idx = 0
-        ret = None
-        if len(diff_universe) != 0:
-            ret = []
-            for i, x in enumerate(self.last_universe):
-                if x not in today_stock_codes:
-                    self.universe[i] = diff_universe[diff_universe_idx]
-                    diff_universe_idx += 1
-                    ret.append(i)
-        return ret
+        if len(diff_universe) == 0:
+            diff_universe = None
+        self.universe = today_stock_codes
+        return diff_universe
 
     def get_price(self):
         if self.observe_price is not None:
@@ -69,7 +63,7 @@ class Environment:
 
     # 종목 변경 시 지난 포트폴리오의 현재 가격 얻어올 때 사용
     def get_price_last_portf(self):
-        return self.price_data.iloc[self.idx + self.num_steps - 1][self.last_universe].values.reshape(-1,)
+        return self.price_data.iloc[self.idx + self.num_steps - 1][self.last_universe]
 
     def get_cap(self):
         if self.observe_cap is not None:
@@ -97,3 +91,5 @@ class Environment:
         # next_sample = np.split(next_sample, self.num_ticker)
         return list(next_sample)
 
+    def get_date(self):
+        return self.date_list[self.idx]
