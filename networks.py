@@ -47,14 +47,14 @@ class Network:
 class DNN(Network):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sub_models = [self.mini_dnn() for _ in range(self.num_ticker - self.last_idx)]
+        # sub_models = [self.mini_dnn() for _ in range(self.num_ticker - self.last_idx)]
         # 마지막 input은 policy : index, value: action
-        inp = [Input(shape=(None, self.input_dim)) for _ in range(self.num_ticker)]
-        inp.append(Input(shape=(None, self.num_index)))
-        inp.append(Input(shape=(self.num_ticker,)))
+        inp = [Input(shape=(1, self.input_dim * self.num_ticker))]
+        inp.append(Input(shape=(1, self.num_index)))
+        inp.append(Input(shape=(1, self.num_ticker)))
         if self.value_flag:
-            inp.append(Input(shape=(self.num_ticker,)))
-        self.model = self.get_network(inp, sub_models)
+            inp.append(Input(shape=(1, self.num_ticker)))
+        self.model = self.get_network(inp)
 
     def residual_layer(self, inp, hidden_size):
         output_r = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(inp)
@@ -75,18 +75,19 @@ class DNN(Network):
         model.add(Dropout(0.1, trainable=self.trainable))
         return model
 
-    def get_network(self, inp, sub_models):
-        output = [tf.squeeze(m(i), axis=-2) for i, m in zip(inp[:self.last_idx], sub_models[:self.last_idx])]
-        output.append(tf.squeeze(sub_models[self.last_idx](inp[self.last_idx]), axis=-2))
-        output.append(sub_models[self.last_idx+1](inp[self.last_idx+1]))
-        if self.value_flag:
-            output.append(sub_models[-1](inp[-1]))
-        output = Concatenate()(output)
+    def get_network(self, inp):
+        # output = [tf.squeeze(m(i), axis=-2) for i, m in zip(inp[:self.last_idx], sub_models[:self.last_idx])]
+        # output.append(tf.squeeze(sub_models[self.last_idx](inp[self.last_idx]), axis=-2))
+        # output.append(sub_models[self.last_idx+1](inp[self.last_idx+1]))
+        # if self.value_flag:
+        #     output.append(sub_models[-1](inp[-1]))
+        output = Concatenate(axis=-1)(inp)
         output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
+        output = self.residual_layer(output, 256)
         # output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
         # output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dense(128, activation=self.activation, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
 
 # refer to paper DTML(jaemin yoo)
@@ -206,7 +207,7 @@ class pi_network:
             pi, logp_pi = self.predict(s)
             pi2, _ = self.predict(last_s)
             # pi 업데이트라 q_net gradient off
-            q1_pi, q2_pi = tf.stop_gradient(value_network.predict(s, pi - pi2))
+            q1_pi, q2_pi = tf.stop_gradient(value_network.predict(s, tf.expand_dims(pi - pi2, 1)))
             q_pi = tf.math.minimum(q1_pi, q2_pi)
             loss_pi = tf.reduce_mean(self.alpha * logp_pi - q_pi, axis=1)
         gradients = tape.gradient(loss_pi, self.network.model.trainable_variables)

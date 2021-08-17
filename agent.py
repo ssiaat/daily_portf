@@ -7,7 +7,7 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = [0.6, 0.6]
+    OVER_CAP = [1.5, 1.5]
 
     # 행동
     ACTION_BUY = 2  # 매수
@@ -81,7 +81,7 @@ class Agent:
     def penalty_diff_bm(self, ratio):
         curr_cap = self.environment.get_cap()
         curr_cap = self.set100(np.where(np.isnan(curr_cap) == True, 0., curr_cap))
-        # ratio = tf.math.softmax(ratio)
+        ratio = tf.math.softmax(ratio)
         ratio = self.set100(tf.where(curr_cap == 0., 0., ratio))
 
         penalty = tf.math.abs(curr_cap - ratio) / 2.0 * 100.0

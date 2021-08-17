@@ -93,7 +93,7 @@ class Environment:
         return [sample, sample_index]
 
     def transform_sample(self, sample):
-        sample = sample.reshape(self.num_ticker, self.num_steps, self.num_features)
-        next_sample = np.split(sample, self.num_ticker)
-        return next_sample
+        next_sample = sample.reshape(1, -1, self.num_steps, self.num_ticker * self.num_features)
+        # next_sample = np.split(next_sample, self.num_ticker)
+        return list(next_sample)
 
