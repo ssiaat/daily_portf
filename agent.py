@@ -99,11 +99,13 @@ class Agent:
 
         want_trade = ratio * curr_cap
         want_trade_mean = (tf.abs(tf.reduce_sum(want_trade[want_trade < 0])) + tf.reduce_sum(want_trade[want_trade > 0])) / 2
+        print(want_trade_mean)
         diff_from_cap = self.OVER_CAP_RANGE * want_trade_mean + self.OVER_CAP - 0.01
+        print(diff_from_cap)
         plus_mask = tf.where((ratio > 0.) == True, 0., -1e10)
         minus_mask = tf.where((ratio < 0.) == True, 0., +1e10)
         want_trade_total_one = tf.nn.softmax(tf.math.add(ratio, plus_mask)) + tf.multiply(tf.nn.softmax(tf.multiply(tf.math.add(ratio, minus_mask), -1.0)), -1.0)
-        ratio = tf.math.multiply(want_trade_total_one, diff_from_cap)
+        ratio = tf.math.multiply(want_trade_total_one, diff_from_cap) * curr_cap
 
         return ratio
 
