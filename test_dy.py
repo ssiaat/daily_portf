@@ -1,9 +1,9 @@
-import data_manager
+# import data_manager
 # import matplotlib.pyplot as plt
-import numpy as np
+# import numpy as np
 #
 # from statsmodels.tsa.stattools import adfuller
-# import pandas as pd
+import pandas as pd
 # import os
 # import tensorflow as tf
 # out = pd.DataFrame(columns=['adfStat', 'pVal', 'lags', 'nObs', '95%conf', 'corr'])
@@ -47,4 +47,8 @@ from datetime import datetime
 #     if len(data_manager.capital.iloc[i].dropna()) != 200:
 #         print(i, len(data_manager.capital.iloc[i].dropna()))
 
-print(len(data_manager.capital.iloc[0][:100].dropna()))
+# print(len(data_manager.capital.iloc[0][:100].dropna()))
+a = [1,2,3]
+b = [4,5,6]
+c = [7,8,9]
+print(pd.DataFrame([a,b,c], index=[0,1,2], columns=['a', 'b', 'c']))

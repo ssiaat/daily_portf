@@ -7,7 +7,7 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = [0.6, 0.6]
+    OVER_CAP = [1.0, 1.0]
 
     # 행동
     ACTION_BUY = 2  # 매수

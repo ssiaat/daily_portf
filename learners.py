@@ -63,8 +63,10 @@ class ReinforcementLearner:
         self.memory_action = []
         self.memory_reward = []
         self.memory_value = []
+        self.memory_copy = []
         self.memory_pv = []
         self.memory_pr = []
+        self.memory_ksret = []
         self.memory_num_stocks = []
 
         # 에포크 관련 정보
@@ -139,6 +141,8 @@ class ReinforcementLearner:
         self.memory_value = []
         self.memory_pv = []
         self.memory_pr = []
+        self.memory_copy = []
+        self.memory_ksret = []
         self.memory_num_stocks = []
 
         # 에포크 관련 정보 초기화
@@ -252,7 +256,8 @@ class ReinforcementLearner:
                 self.diff_stocks_idx = None
 
                 curr_cap = self.environment.get_cap()
-                mean_copy += tf.reduce_sum(tf.math.abs(curr_cap - self.agent.portfolio_ratio) / 2.0 * 100.0)
+                bm_copy = tf.reduce_sum(tf.math.abs(curr_cap - self.agent.portfolio_ratio) / 2.0 * 100.0)
+                mean_copy += bm_copy
 
                 # 행동 및 행동에 대한 결과를 기억
                 self.memory_sample_idx.append(idx)
@@ -260,6 +265,8 @@ class ReinforcementLearner:
                 self.memory_reward.append(immediate_reward)
                 self.memory_pv.append(self.agent.last_portfolio_value)  # last는 어제 투자한 portf를 오늘 종가로 평가한 것
                 self.memory_pr.append(self.agent.last_portfolio_ratio)
+                self.memory_copy.append(bm_copy)
+                self.memory_ksret.append((self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0])
 
                 # 반복에 대한 정보 갱신
                 self.itr_cnt += 1
@@ -318,7 +325,7 @@ class ReinforcementLearner:
             target_value_output1_path = self.target_value_network1_path[:-3] + '_output1' + self.target_value_network1_path[-3:]
             target_value_output2_path = self.target_value_network2_path[:-3] + '_output2' + self.target_value_network2_path[-3:]
             policy_network_path = self.policy_network_path[:-3] + '_output1' + self.policy_network_path[-3:]
-            pd.DataFrame(self.memory_pv, index=self.price_data.index, columns=['pv']).to_csv('models/test_result.csv')
+            pd.DataFrame([self.memory_pv, self.memory_copy, self.memory_ksret], index=self.price_data.index, columns=['pv', 'copy', 'ks200']).to_csv('models/test_result.csv')
         else:
             value_output1_path = self.value_network1_path
             value_output2_path = self.value_network2_path
