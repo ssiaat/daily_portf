@@ -7,7 +7,8 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = [1.0, 1.0]
+    OVER_CAP = 0.2
+    OVER_CAP_RANGE = 0.04
 
     # 행동
     ACTION_BUY = 2  # 매수
@@ -95,10 +96,15 @@ class Agent:
         curr_cap = np.where(np.isnan(curr_cap), 0., curr_cap)
         curr_price = self.environment.get_price()
         curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap))
-        # ratio = tf.math.softmax(ratio)
-        # ratio = tf.clip_by_value(ratio, curr_cap * (1 - self.OVER_CAP[1]), curr_cap * (1 + self.OVER_CAP[0]))
-        ratio = (1 + ratio * self.OVER_CAP[0]) * curr_cap
-        ratio = self.set100(ratio)
+
+        want_trade = ratio * curr_cap
+        want_trade_mean = (tf.abs(tf.reduce_sum(want_trade[want_trade < 0])) + tf.reduce_sum(want_trade[want_trade > 0])) / 2
+        diff_from_cap = self.OVER_CAP_RANGE * want_trade_mean + self.OVER_CAP - 0.01
+        plus_mask = tf.where((ratio > 0.) == True, 0., -1e10)
+        minus_mask = tf.where((ratio < 0.) == True, 0., +1e10)
+        want_trade_total_one = tf.nn.softmax(tf.math.add(ratio, plus_mask)) + tf.multiply(tf.nn.softmax(tf.multiply(tf.math.add(ratio, minus_mask), -1.0)), -1.0)
+        ratio = tf.math.multiply(want_trade_total_one, diff_from_cap)
+
         return ratio
 
     def renewal_portfolio_ratio(self, transaction, buy_value_each=None, diff_stock_idx=None):

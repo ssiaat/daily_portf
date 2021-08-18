@@ -20,7 +20,7 @@ start_year = 2004 # 시작 연도
 end_year = 2015   # 종료 연도
 
 lr = 0.01
-net = 'lstm'
+net = 'dnn'
 discount_factor = 0.9
 balance = 1e10     # 초기 자본금
 num_epoches = 10

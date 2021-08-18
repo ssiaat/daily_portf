@@ -229,7 +229,7 @@ class ReinforcementLearner:
                 if sample is None:
                     break
                 if self.diff_stocks_idx:
-                    print(f'change universe  {len(self.diff_stocks_idx)}  {self.price_data.index[self.environment.idx]}')
+                    print(f'change universe  {len(self.diff_stocks_idx)}  {self.price_data.index[self.environment.idx + self.num_steps - 1]}')
                 next_sample = self.environment.transform_sample(sample[0])
                 next_sample.append(np.array([sample[1]]))
                 next_sample.append(np.array([self.agent.portfolio_ratio]))

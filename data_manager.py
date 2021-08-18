@@ -131,7 +131,7 @@ def load_data_sql(fpath, start_idx, end_idx, date_idx, stationary, test):
             temp = training_data[[price]].apply(get_return_price, args=(i,))
             training_data['pm_r' + str(i//20)] = temp[price]
         training_data['amihud_illiq'] = (training_data['pm_r0'].abs() / training_data['trs_amount']) * 1e10
-
+        training_data.drop([price, 'cap'], axis=1, inplace=True)
         if stationary:
             training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
             start_idx -= len(w) - 1 + 240
