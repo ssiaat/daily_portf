@@ -7,8 +7,8 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = 0.2
-    OVER_CAP_RANGE = 0.04
+    OVER_CAP = 0.19
+    OVER_CAP_RANGE = 0.03
 
     # 행동
     ACTION_BUY = 2  # 매수
@@ -104,6 +104,7 @@ class Agent:
         minus_mask = tf.where((ratio < 0.) == True, 0., +1e10)
         want_trade_total_one = tf.nn.softmax(tf.math.add(ratio, plus_mask)) + tf.multiply(tf.nn.softmax(tf.multiply(tf.math.add(ratio, minus_mask), -1.0)), -1.0)
         ratio = tf.math.multiply(want_trade_total_one, diff_from_cap) * curr_cap
+        print(tf.reduce_sum(tf.abs(ratio - curr_cap)))
 
         return ratio
 

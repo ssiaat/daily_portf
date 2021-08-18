@@ -256,7 +256,10 @@ class ReinforcementLearner:
                 self.diff_stocks_idx = None
 
                 curr_cap = self.environment.get_cap()
+                print(tf.reduce_sum(tf.abs(ratio - curr_cap)) / 2.0 * 100.0)
                 bm_copy = tf.reduce_sum(tf.math.abs(curr_cap - self.agent.portfolio_ratio) / 2.0 * 100.0)
+                print(bm_copy)
+                print()
                 mean_copy += bm_copy
 
                 # 행동 및 행동에 대한 결과를 기억
