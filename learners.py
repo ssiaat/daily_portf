@@ -277,6 +277,8 @@ class ReinforcementLearner:
                     print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 10.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
                                                       (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
                     mean_copy = 0.
+                    self.save_models()
+                    exit()
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
                     print('loss is nan!')
                     return
@@ -324,6 +326,9 @@ class ReinforcementLearner:
             target_value_output1_path = self.target_value_network1_path[:-3] + '_output1' + self.target_value_network1_path[-3:]
             target_value_output2_path = self.target_value_network2_path[:-3] + '_output2' + self.target_value_network2_path[-3:]
             policy_network_path = self.policy_network_path[:-3] + '_output1' + self.policy_network_path[-3:]
+            print(self.memory_pr)
+            print(self.memory_copy)
+            print(self.memory_ksret)
             pd.DataFrame([self.memory_pv, self.memory_copy, self.memory_ksret], index=self.price_data.index, columns=['pv', 'copy', 'ks200']).to_csv('models/test_result.csv')
             self.memory_pr.to_csv('models/portf_ratio.csv')
         else:
