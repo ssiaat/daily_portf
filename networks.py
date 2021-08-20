@@ -195,7 +195,9 @@ class pi_network:
         pi_distribution = tfp.distributions.Normal(mu, std)
         log_prob_pi = pi_distribution.log_prob(pi_action)
         log_prob_pi -= (2 * (np.log(2) - pi_action - tf.math.softplus(-2 * pi_action)))
-
+        if mu.shape[0] == 1:
+            print(mu.numpy()[:10])
+            print((mu + tf.random.normal(tf.shape(mu)) * 0.01 * std).numpy()[:10])
         return tf.nn.softmax(pi_action), log_prob_pi
 
 

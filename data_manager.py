@@ -84,7 +84,7 @@ w = get_weights_FFD(0.3, 1e-3)
 def make_data(start_date, end_date, stationary, test):
     global indexes
     start_idx = max(list(indexes.index).index(start_date), 240)
-    end_idx = list(indexes.index).index(end_date)
+    end_idx = list(indexes.index).index(end_date) - 200
 
     if stationary and start_idx < len(w) - 1 + 240:
         start_idx = len(w) - 1 + 240
@@ -127,16 +127,17 @@ def load_data_sql(fpath, start_idx, end_idx, date_idx, stationary, test):
     else:
         # 학습 데이터 분리, 전처리
         training_data = data.copy()[COLUMNS_TRAINING_DATA]
-        for i in [1, 60, 240]:
-            temp = training_data[[price]].apply(get_return_price, args=(i,))
-            training_data['pm_r' + str(i//20)] = temp[price]
-        training_data['amihud_illiq'] = (training_data['pm_r0'].abs() / training_data['trs_amount']) * 1e10
-        training_data.drop([price, 'cap'], axis=1, inplace=True)
-        if stationary:
-            training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
-            start_idx -= len(w) - 1 + 240
-            end_idx -= len(w) - 1 + 240
-        training_data = preprocessing(training_data, start_idx, end_idx, test)
+        # for i in [1, 60, 240]:
+        #     temp = training_data[[price]].apply(get_return_price, args=(i,))
+        #     training_data['pm_r' + str(i//20)] = temp[price]
+        # training_data['amihud_illiq'] = (training_data['pm_r0'].abs() / training_data['trs_amount']) * 1e10
+        # # training_data.drop([price, 'cap'], axis=1, inplace=True)
+        # if stationary:
+        #     training_data = training_data.rolling(len(w)).apply(lambda x: (x*w).sum()).dropna()
+        #     start_idx -= len(w) - 1 + 240
+        #     end_idx -= len(w) - 1 + 240
+        # training_data = preprocessing(training_data, start_idx, end_idx, test)
+
 
     # index 조정
     temp = pd.DataFrame(index=date_idx)

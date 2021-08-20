@@ -65,7 +65,7 @@ class ReinforcementLearner:
         self.memory_value = []
         self.memory_copy = []
         self.memory_pv = []
-        self.memory_pr = []
+        self.memory_pr = pd.DataFrame(index=price_data.index, columns=price_data.columns)
         self.memory_ksret = []
         self.memory_num_stocks = []
 
@@ -139,7 +139,7 @@ class ReinforcementLearner:
         self.memory_reward = []
         self.memory_value = []
         self.memory_pv = []
-        self.memory_pr = []
+        self.memory_pr = pd.DataFrame(index=self.price_data.index, columns=self.price_data.columns)
         self.memory_copy = []
         self.memory_ksret = []
         self.memory_num_stocks = []
@@ -262,7 +262,7 @@ class ReinforcementLearner:
                 self.memory_action.append(action)
                 self.memory_reward.append(immediate_reward)
                 self.memory_pv.append(self.agent.last_portfolio_value)  # last는 어제 투자한 portf를 오늘 종가로 평가한 것
-                self.memory_pr.append(self.agent.last_portfolio_ratio)
+                self.memory_pr.iloc[self.environment.idx][self.environment.universe] = self.agent.last_portfolio_ratio
                 self.memory_copy.append(bm_copy)
                 self.memory_ksret.append((self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0])
 
@@ -278,6 +278,7 @@ class ReinforcementLearner:
                                                       (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
                     mean_copy = 0.
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
+                    print('loss is nan!')
                     return
 
             # 에포크 종료 후 학습
@@ -324,6 +325,7 @@ class ReinforcementLearner:
             target_value_output2_path = self.target_value_network2_path[:-3] + '_output2' + self.target_value_network2_path[-3:]
             policy_network_path = self.policy_network_path[:-3] + '_output1' + self.policy_network_path[-3:]
             pd.DataFrame([self.memory_pv, self.memory_copy, self.memory_ksret], index=self.price_data.index, columns=['pv', 'copy', 'ks200']).to_csv('models/test_result.csv')
+            self.memory_pr.to_csv('models/portf_ratio.csv')
         else:
             value_output1_path = self.value_network1_path
             value_output2_path = self.value_network2_path
@@ -364,15 +366,15 @@ class A2CLearner(ReinforcementLearner):
             sample = self.environment.get_training_data(idx)
             s[i] = self.environment.transform_sample(sample[0])
             s_index[i] = np.array([sample[1]])
-            portf_state[i] = np.array(self.memory_pr[idx])
+            portf_state[i] = np.array(self.memory_pr.iloc[idx].dropna().values)
             sample = self.environment.get_training_data(idx + 1)
             next_s[i] = self.environment.transform_sample(sample[0])
             next_s_index[i] = np.array([sample[1]])
-            portf_next_state[i] = np.array([self.memory_pr[idx + 1]])
+            portf_next_state[i] = np.array(self.memory_pr.iloc[idx + 1].dropna().values)
             sample = self.environment.get_training_data(idx - 1)
             last_s[i] = self.environment.transform_sample(sample[0])
             last_s_index[i] = np.array([sample[1]])
-            portf_last_state[i] = np.array(self.memory_pr[idx - 1])
+            portf_last_state[i] = np.array(self.memory_pr.iloc[idx - 1].dropna().values)
             action[i] = np.array(self.memory_action[idx])
             reward[i] = self.memory_reward[idx+1]
             if idx == len(self.price_data) - 1:
