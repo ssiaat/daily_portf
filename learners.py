@@ -114,7 +114,8 @@ class ReinforcementLearner:
             self.target_value_network.load_model(model_path=[self.target_value_network1_path, self.target_value_network2_path])
 
 
-    def init_policy_network(self, activation='tanh'):
+    # tanh -> linear
+    def init_policy_network(self, activation='linear'):
         self.policy_network = pi_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                          num_ticker=self.num_ticker, num_steps=self.num_steps, num_index=self.num_index,
                                          trainable=self.trainable, activation=activation, value_flag=False, alpha=self.alpha)
@@ -401,4 +402,5 @@ class A2CLearner(ReinforcementLearner):
         q1_pi_targ, q2_pi_targ = self.target_value_network.predict(next_s.copy(), a2 - a1)
         q_pi_targ = tf.math.minimum(q1_pi_targ, q2_pi_targ)
         backup = r + self.discount_factor * (1 - d) * (q_pi_targ - self.alpha * logp_a2)
+
         return backup

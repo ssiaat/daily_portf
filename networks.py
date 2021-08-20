@@ -10,7 +10,6 @@ from tensorflow.keras.optimizers import Adam, SGD
 from tensorflow.keras.metrics import mean_squared_error as mse
 from keras import Input
 import tensorflow as tf
-import tensorflow_probability as tfp
 
 optimizer = SGD
 
@@ -182,21 +181,29 @@ class pi_network:
     def predict(self, s, deterministic=False, learn=True):
         output = self.network.model(s)
         mu = tf.reshape(self.mu_layer(output), (-1, self.network.num_ticker))
-        log_std = tf.reshape(self.log_std_layer(output), (-1, self.network.num_ticker)) * 2
+        log_std = tf.reshape(self.log_std_layer(output), (-1, self.network.num_ticker))
         log_std = tf.clip_by_value(log_std, LOG_STD_MIN, LOG_STD_MAX)
         if not learn:
             mu = tf.squeeze(mu)
             log_std = tf.squeeze(log_std)
         std = tf.math.exp(log_std)
-        if deterministic:
-            pi_action = mu
-        else:
-            pi_action = mu + tf.random.normal(tf.shape(mu)) * 0.1 * std
-        pi_distribution = tfp.distributions.Normal(mu, std)
-        log_prob_pi = pi_distribution.log_prob(pi_action)
-        log_prob_pi -= (2 * (np.log(2) - pi_action - tf.math.softplus(-2 * pi_action)))
+        pi = mu + tf.random.normal(tf.shape(mu)) * 0.1 * std
+        # pi_distribution = tfp.distributions.Normal(mu, std)
+        log_prob_pi = self.gaussian_likelihood(pi, mu, log_std)
 
-        return tf.nn.softmax(pi_action), log_prob_pi
+        # apply squashing
+        log_prob_pi -= 2*(np.log(2) - pi - tf.nn.softplus(-2*pi))
+        if deterministic:
+            pi_action = tf.nn.softmax(mu)
+        else:
+            pi_action = tf.nn.softmax(pi)
+
+        return pi_action, log_prob_pi
+
+
+    def gaussian_likelihood(self, x, mu, log_std):
+        pre_sum = -0.5 * (((x - mu) / (tf.exp(log_std) + EPS)) ** 2 + 2 * log_std + np.log(2 * np.pi))
+        return pre_sum
 
 
     def learn(self, s, last_s, value_network):
