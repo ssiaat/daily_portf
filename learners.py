@@ -28,7 +28,7 @@ class ReinforcementLearner:
         assert lr > 0
 
         # 학습여부 설정
-        self.trainable = trainable
+        self.trainable = False if test else True
         self.test = test
 
         # 환경 설정
@@ -261,9 +261,9 @@ class ReinforcementLearner:
                 self.memory_sample_idx.append(idx)
                 self.memory_action.append(action)
                 self.memory_reward.append(immediate_reward)
-                self.memory_pv.append(self.agent.last_portfolio_value)  # last는 어제 투자한 portf를 오늘 종가로 평가한 것
+                self.memory_pv.append(self.agent.last_portfolio_value.numpy())  # last는 어제 투자한 portf를 오늘 종가로 평가한 것
                 self.memory_pr.iloc[self.environment.idx][self.environment.universe] = self.agent.last_portfolio_ratio
-                self.memory_copy.append(bm_copy)
+                self.memory_copy.append(bm_copy.numpy())
                 self.memory_ksret.append((self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0])
 
                 # 반복에 대한 정보 갱신
@@ -277,8 +277,7 @@ class ReinforcementLearner:
                     print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 10.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
                                                       (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
                     mean_copy = 0.
-                    self.save_models()
-                    exit()
+
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
                     print('loss is nan!')
                     return
@@ -326,10 +325,8 @@ class ReinforcementLearner:
             target_value_output1_path = self.target_value_network1_path[:-3] + '_output1' + self.target_value_network1_path[-3:]
             target_value_output2_path = self.target_value_network2_path[:-3] + '_output2' + self.target_value_network2_path[-3:]
             policy_network_path = self.policy_network_path[:-3] + '_output1' + self.policy_network_path[-3:]
-            print(self.memory_pr)
-            print(self.memory_copy)
-            print(self.memory_ksret)
-            pd.DataFrame([self.memory_pv, self.memory_copy, self.memory_ksret], index=self.price_data.index, columns=['pv', 'copy', 'ks200']).to_csv('models/test_result.csv')
+
+            pd.DataFrame(np.array([self.memory_pv, self.memory_copy, self.memory_ksret]).T, index=self.price_data.index[:10], columns=['pv', 'copy', 'ks200']).to_csv('models/test_result.csv')
             self.memory_pr.to_csv('models/portf_ratio.csv')
         else:
             value_output1_path = self.value_network1_path

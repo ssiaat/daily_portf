@@ -1,7 +1,9 @@
 import numpy as np
+import pandas as pd
 import tensorflow as tf
+import tensorflow_probability as tfp
 
-a = np.array([1,2,3, -4])
-a = tf.clip_by_value(a, 0, 10)
-print(a.shape[0])
-# print(a[a<0.])
+mu = 2.
+std = 3.
+a = tfp.distributions.Normal(mu, std)
+print(a.rsample())

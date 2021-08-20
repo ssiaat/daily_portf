@@ -16,10 +16,10 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # Hyperparameters
 num_stocks = 200  # universe에 존재하는 종목수
 num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
-start_year = 2016 # 시작 연도
-end_year = 2016   # 종료 연도
+start_year = 2004 # 시작 연도
+end_year = 2015   # 종료 연도
 
-lr = 0.01
+lr = 0.1
 net = 'dnn'
 discount_factor = 0.9
 balance = 1e10     # 초기 자본금

@@ -191,7 +191,8 @@ class Agent:
             self.win_cnt += 1
         # self.portfolio_ratio = tf.cast(self.portfolio_ratio, tf.float32)
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
-        self.immediate_reward = (self.profitloss - self.last_profitloss) * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio)
+        self.immediate_reward = (self.profitloss - self.last_profitloss) * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio) * 100
+
         return self.immediate_reward
 
     def act(self, ratio, diff_stocks_idx=None):

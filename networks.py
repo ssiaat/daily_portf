@@ -58,21 +58,21 @@ class DNN(Network):
 
     def residual_layer(self, inp, hidden_size):
         output_r = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(inp)
-        output_r = Dropout(0.1, trainable=self.trainable)(output_r)
+        # output_r = Dropout(0.1, trainable=self.trainable)(output_r)
         output = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(output_r)
-        output = Dropout(0.1, trainable=self.trainable)(output)
+        # output = Dropout(0.1, trainable=self.trainable)(output)
         output = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = Dropout(0.1, trainable=self.trainable)(output)
+        # output = Dropout(0.1, trainable=self.trainable)(output)
         return output + output_r
 
     def mini_dnn(self):
         model = Sequential()
         model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
-        model.add(Dropout(0.1, trainable=self.trainable))
+        # model.add(Dropout(0.1, trainable=self.trainable))
         # model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
         # model.add(Dropout(0.1, trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
-        model.add(Dropout(0.1, trainable=self.trainable))
+        # model.add(Dropout(0.1, trainable=self.trainable))
         return model
 
     def get_network(self, inp, sub_models):
@@ -111,7 +111,7 @@ class AttentionLSTM(Network):
     # after expand input, calculate hidden state of input sequences
     def mini_model(self):
         model = Sequential()
-        model.add(LSTM(self.hidden_size_lstm, dropout=0.1, return_sequences=True, stateful=False, kernel_initializer=self.initializer))
+        model.add(LSTM(self.hidden_size_lstm, dropout=0., return_sequences=True, stateful=False, kernel_initializer=self.initializer))
         model.add(LayerNormalization(trainable=self.trainable))
         return model
 
@@ -155,9 +155,9 @@ class AttentionLSTM(Network):
             output = [output, inp_portf]
         output = Concatenate(axis=-1)(output)
         output_t = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
-        output = Dropout(0.1, trainable=self.trainable)(output_t)
-        output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output)
-        output = Dropout(0.1, trainable=self.trainable)(output)
+        # output = Dropout(0.1, trainable=self.trainable)(output_t)
+        output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output_t)
+        # output = Dropout(0.1, trainable=self.trainable)(output)
         output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output + output_t)
 
         return Model(inp, output)
@@ -191,13 +191,11 @@ class pi_network:
         if deterministic:
             pi_action = mu
         else:
-            pi_action = mu + tf.random.normal(tf.shape(mu)) * 0.01 * std
+            pi_action = mu + tf.random.normal(tf.shape(mu)) * 0.1 * std
         pi_distribution = tfp.distributions.Normal(mu, std)
         log_prob_pi = pi_distribution.log_prob(pi_action)
         log_prob_pi -= (2 * (np.log(2) - pi_action - tf.math.softplus(-2 * pi_action)))
-        if mu.shape[0] == 1:
-            print(mu.numpy()[:10])
-            print((mu + tf.random.normal(tf.shape(mu)) * 0.01 * std).numpy()[:10])
+
         return tf.nn.softmax(pi_action), log_prob_pi
 
 
