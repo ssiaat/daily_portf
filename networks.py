@@ -163,7 +163,7 @@ class AttentionLSTM(Network):
         return Model(inp, output)
 
 LOG_STD_MIN = -20
-LOG_STD_MAX = 0.1
+LOG_STD_MAX = 1
 EPS = 1e-8
 class pi_network:
     def __init__(self, net='dnn', lr=0.001, alpha=0.2, *args, **kargs):
@@ -176,7 +176,7 @@ class pi_network:
         self.discount_factor = 0.9
         self.optimizer = optimizer(lr)
         self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
-        self.log_std_layer = Dense(self.network.output_dim, activation='linear', kernel_initializer=self.network.initializer)
+        self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
 
     def predict(self, s, deterministic=False, learn=True):
@@ -191,13 +191,12 @@ class pi_network:
         if deterministic:
             pi_action = mu
         else:
-            pi_action = mu + tf.random.normal(tf.shape(mu)) * std
-            pi_action = tf.cast(tf.clip_by_value(pi_action, -1.0, 1.0), tf.float32)
+            pi_action = mu + tf.random.normal(tf.shape(mu)) * 0.01 * std
         pi_distribution = tfp.distributions.Normal(mu, std)
         log_prob_pi = pi_distribution.log_prob(pi_action)
         log_prob_pi -= (2 * (np.log(2) - pi_action - tf.math.softplus(-2 * pi_action)))
 
-        return pi_action, log_prob_pi
+        return tf.nn.softmax(pi_action), log_prob_pi
 
 
     def learn(self, s, last_s, value_network):

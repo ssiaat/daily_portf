@@ -131,7 +131,6 @@ class ReinforcementLearner:
         ratio = tf.cast(self.environment.get_cap(), tf.float32)
         self.agent.act(ratio)
         self.agent.balance += self.agent.initial_balance - self.agent.portfolio_value
-
         self.environment.reset()
 
         # 메모리 초기화
@@ -197,7 +196,6 @@ class ReinforcementLearner:
         self.update_target_networks()
 
 
-
     def run(self, num_epoches=100, balance=10000000):
         info = "RL:sac LR:{lr}".format(lr=self.lr)
         with self.lock:
@@ -243,12 +241,12 @@ class ReinforcementLearner:
                 # 오늘 가격으로 변경된 portf_value로 어제 투자에 대한 보상 계산
                 immediate_reward = self.agent.get_reward()
                 if self.clip:
-                    ratio = self.agent.similar_with_cap(pi)
-                else:
-                    ratio, penalty = self.agent.penalty_diff_bm(pi)
-                    immediate_reward += penalty
+                    pi = self.agent.similar_with_cap(pi)
+                # else:
+                #     ratio, penalty = self.agent.penalty_diff_bm(pi)
+                #     immediate_reward += penalty
 
-                action, ratio = self.agent.decide_action(ratio, self.clip)
+                action, ratio = self.agent.decide_action(pi, self.clip)
 
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
                 self.agent.act(ratio, self.diff_stocks_idx)
@@ -256,10 +254,7 @@ class ReinforcementLearner:
                 self.diff_stocks_idx = None
 
                 curr_cap = self.environment.get_cap()
-                print(tf.reduce_sum(tf.abs(ratio - curr_cap)) / 2.0 * 100.0)
-                bm_copy = tf.reduce_sum(tf.math.abs(curr_cap - self.agent.portfolio_ratio) / 2.0 * 100.0)
-                print(bm_copy)
-                print()
+                bm_copy = tf.reduce_sum(tf.math.abs(curr_cap - self.agent.portfolio_ratio)) / 2.0 * 100.0
                 mean_copy += bm_copy
 
                 # 행동 및 행동에 대한 결과를 기억

@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from utils import softmax
 
 
 class Agent:
@@ -95,18 +96,29 @@ class Agent:
         curr_cap = self.environment.get_cap()
         curr_cap = np.where(np.isnan(curr_cap), 0., curr_cap)
         curr_price = self.environment.get_price()
-        curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap))
+        curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap)).numpy()
+        ratio = tf.where(curr_cap == 0., 0, ratio).numpy()
 
-        want_trade = ratio * curr_cap
-        want_trade_mean = (tf.abs(tf.reduce_sum(want_trade[want_trade < 0])) + tf.reduce_sum(want_trade[want_trade > 0])) / 2
-        diff_from_cap = self.OVER_CAP_RANGE * want_trade_mean + self.OVER_CAP - 0.02
-        plus_mask = tf.where((ratio > 0.) == True, 0., -1e10)
-        minus_mask = tf.where((ratio < 0.) == True, 0., +1e10)
-        want_trade_total_one = tf.nn.softmax(tf.math.add(ratio, plus_mask)) + tf.multiply(tf.nn.softmax(tf.multiply(tf.math.add(ratio, minus_mask), -1.0)), -1.0)
-        ratio = tf.math.multiply(want_trade_total_one, diff_from_cap) * curr_cap
+        sell_ratio = np.where(ratio < 0., ratio, 0.) * curr_cap
+        print(sell_ratio.sum())
+        diff = abs(sell_ratio.sum()) - self.OVER_CAP
+        diff_ratio = min(abs(sell_ratio.sum()), self.OVER_CAP)
+        print(diff_ratio)
+        if diff > 0:
+            sell_ratio -= self.set100(np.where(ratio < 0., ratio, 0.)).numpy() * diff
+
+        ratio = sell_ratio + self.set100(np.where(ratio > 0., ratio, 0.)).numpy() * diff_ratio + curr_cap
         print(tf.reduce_sum(tf.abs(ratio - curr_cap)))
 
-        return ratio
+        # want_trade = ratio * curr_cap
+        # want_trade_mean = (abs(want_trade[want_trade < 0].sum()) + want_trade[want_trade > 0].sum()) / 2
+        # diff_from_cap = self.OVER_CAP_RANGE * want_trade_mean + self.OVER_CAP
+        #
+        # plus_softmax = softmax(np.where(ratio > 0., ratio, -1e10))
+        # minus_softmax = softmax(-1 * np.where(ratio < 0., ratio, 1e10)) * -1
+        # ratio = curr_cap + (plus_softmax + minus_softmax) * diff_from_cap
+        # print(ratio[ratio < 0.].sum())
+        return tf.cast(ratio, tf.float32)
 
     def renewal_portfolio_ratio(self, transaction, buy_value_each=None, diff_stock_idx=None):
         if tf.reduce_sum(self.num_stocks) > 0:
@@ -142,7 +154,7 @@ class Agent:
         curr_price = self.environment.get_price()
         if diff_stocks_idx is not None:
             curr_price = self.environment.get_price_last_portf()
-        sell_trading_unit = tf.math.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0., 10.) * \
+        sell_trading_unit = tf.math.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0., 10.) *\
                                      self.portfolio_value_each / np.where(curr_price == 0., 1., curr_price))
 
         # 변경 종목 idx중 기존 종목 모두 매도
@@ -153,7 +165,7 @@ class Agent:
 
         # 거래정지 상태인데 거래하는 경우 방지
         sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
-        sell_trading_value = tf.math.ceil(curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1]))
+        sell_trading_value = tf.math.floor(curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1]))
 
         buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0., 10.)
         curr_price = self.environment.get_price()
