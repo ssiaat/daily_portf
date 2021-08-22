@@ -269,10 +269,10 @@ class ReinforcementLearner:
 
                 # 반복에 대한 정보 갱신
                 self.itr_cnt += 1
-                if self.itr_cnt % 10 == 0:
-                    if self.itr_cnt == 10:
+                if self.itr_cnt % 20 == 0:
+                    if self.itr_cnt == 20:
                         _ = self.memory_sample_idx.popleft()
-                    fit_iter = 3 if len(self.memory_sample_idx) == self.max_sample_len else 1
+                    fit_iter = 3 if len(self.memory_sample_idx) == self.max_sample_len else 2
                     for _ in range(fit_iter):
                         self.fit()
                     print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 10.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
@@ -327,7 +327,7 @@ class ReinforcementLearner:
             target_value_output2_path = self.target_value_network2_path[:-3] + '_output2' + self.target_value_network2_path[-3:]
             policy_network_path = self.policy_network_path[:-3] + '_output1' + self.policy_network_path[-3:]
 
-            pd.DataFrame(np.array([self.memory_pv, self.memory_copy, self.memory_ksret]).T, index=self.price_data.index[:10], columns=['pv', 'copy', 'ks200']).to_csv('models/test_result.csv')
+            pd.DataFrame(np.array([self.memory_pv, self.memory_copy, self.memory_ksret]).T, index=self.price_data.index[self.num_steps-1:], columns=['pv', 'copy', 'ks200']).to_csv('models/test_result.csv')
             self.memory_pr.to_csv('models/portf_ratio.csv')
         else:
             value_output1_path = self.value_network1_path
