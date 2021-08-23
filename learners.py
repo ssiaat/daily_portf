@@ -272,10 +272,10 @@ class ReinforcementLearner:
                 if self.itr_cnt % 20 == 0:
                     if self.itr_cnt == 20:
                         _ = self.memory_sample_idx.popleft()
-                    fit_iter = 5 if len(self.memory_sample_idx) == self.max_sample_len else 2
+                    fit_iter = 50 if len(self.memory_sample_idx) == self.max_sample_len else 10
                     for _ in range(fit_iter):
                         self.fit()
-                    print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 10.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
+                    print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 20.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
                                                       (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
                     mean_copy = 0.
 
@@ -284,7 +284,7 @@ class ReinforcementLearner:
                     return
 
             # 에포크 종료 후 학습
-            for i in range(10):
+            for i in range(50):
                 self.fit(finished=True)
             # print(f'differ between port and cap: {self.agent.portfolio_ratio - self.environment.get_cap()}')
 
