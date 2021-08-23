@@ -140,13 +140,11 @@ class Agent:
             self.portfolio_value = tf.cast(tf.reduce_sum(self.portfolio_value_each), tf.float32) + self.balance
 
 
-    def decide_action(self, ratio, clip):
+    def decide_action(self, ratio):
         # hold 여부 결정
         if self.hold_criter > 0.:
             ratio = self.set100(np.where(abs(ratio - self.portfolio_ratio) < self.hold_criter, self.portfolio_ratio, ratio))
 
-        # if clip:
-        #     ratio = self.similar_with_cap(ratio)
         action = ratio - self.portfolio_ratio
         return action, ratio
 
@@ -218,6 +216,8 @@ class Agent:
 
         # 포트폴리오 가치 갱신, 거래세 반영
         self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)
+
+        return self.portfolio_ratio - self.last_portfolio_ratio
 
 
     def tf2np(self, tensor):

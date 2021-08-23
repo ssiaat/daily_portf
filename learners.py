@@ -247,10 +247,10 @@ class ReinforcementLearner:
                 #     ratio, penalty = self.agent.penalty_diff_bm(pi)
                 #     immediate_reward += penalty
 
-                action, ratio = self.agent.decide_action(pi, self.clip)
+                # action, ratio = self.agent.decide_action(pi, self.clip)
 
                 # 종목 변화가 있다면 해당 종목의 idx 저장, agent.act에서 반영
-                self.agent.act(ratio, self.diff_stocks_idx)
+                action = self.agent.act(pi, self.diff_stocks_idx)
 
                 self.diff_stocks_idx = None
 
@@ -272,7 +272,7 @@ class ReinforcementLearner:
                 if self.itr_cnt % 20 == 0:
                     if self.itr_cnt == 20:
                         _ = self.memory_sample_idx.popleft()
-                    fit_iter = 3 if len(self.memory_sample_idx) == self.max_sample_len else 2
+                    fit_iter = 5 if len(self.memory_sample_idx) == self.max_sample_len else 2
                     for _ in range(fit_iter):
                         self.fit()
                     print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 10.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
@@ -397,7 +397,7 @@ class A2CLearner(ReinforcementLearner):
         return s, action, reward, last_s, next_s, d
 
     def calculate_yvalue(self, r, s, next_s, d):
-        a1, _ = self.policy_network.predict(next_s)
+        a1, _ = self.policy_network.predict(s)
         a2, logp_a2 = self.policy_network.predict(next_s)
         q1_pi_targ, q2_pi_targ = self.target_value_network.predict(next_s.copy(), a2 - a1)
         q_pi_targ = tf.math.minimum(q1_pi_targ, q2_pi_targ)

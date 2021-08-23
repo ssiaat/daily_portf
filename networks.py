@@ -110,7 +110,7 @@ class AttentionLSTM(Network):
     # after expand input, calculate hidden state of input sequences
     def mini_model(self):
         model = Sequential()
-        model.add(LSTM(self.hidden_size_lstm, dropout=0., return_sequences=True, stateful=False, kernel_initializer=self.initializer))
+        model.add(LSTM(self.hidden_size_lstm, dropout=0.1, return_sequences=True, stateful=False, kernel_initializer=self.initializer))
         model.add(LayerNormalization(trainable=self.trainable))
         return model
 
@@ -153,11 +153,11 @@ class AttentionLSTM(Network):
         else:
             output = [output, inp_portf]
         output = Concatenate(axis=-1)(output)
-        output_t = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
-        # output = Dropout(0.1, trainable=self.trainable)(output_t)
-        output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output_t)
-        # output = Dropout(0.1, trainable=self.trainable)(output)
-        output = Dense(512, activation=self.activation_last, kernel_initializer=self.initializer)(output + output_t)
+        output = Dense(2048, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
+        output = Dense(1024, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
+        output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
 
         return Model(inp, output)
 
@@ -187,7 +187,7 @@ class pi_network:
             mu = tf.squeeze(mu)
             log_std = tf.squeeze(log_std)
         std = tf.math.exp(log_std)
-        pi = mu + tf.random.normal(tf.shape(mu)) * 0.1 * std
+        pi = mu + tf.random.normal(tf.shape(mu)) * 0.01 * std
         # pi_distribution = tfp.distributions.Normal(mu, std)
         log_prob_pi = self.gaussian_likelihood(pi, mu, log_std)
 
