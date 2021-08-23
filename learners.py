@@ -222,7 +222,6 @@ class ReinforcementLearner:
             # 환경, 에이전트, 신경망, 가시화, 메모리 초기화
             self.reset()
             while True:
-                print(len(self.environment.universe))
                 # 샘플 생성, sample = [sample, sample of index]
                 sample, idx = self.build_sample()
 
@@ -232,7 +231,7 @@ class ReinforcementLearner:
                     print(f'change universe  {len(self.diff_stocks_idx)}  {self.price_data.index[self.environment.idx + self.num_steps - 1]}')
                 next_sample = self.environment.transform_sample(sample[0])
                 next_sample.append(np.array([sample[1]]))
-                next_sample.append(np.array([sample[2]]))
+                next_sample.append(np.array(sample[2]))
                 next_sample.append(np.array([self.agent.portfolio_ratio]))
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
@@ -272,7 +271,6 @@ class ReinforcementLearner:
                 # 반복에 대한 정보 갱신
                 self.itr_cnt += 1
                 if self.itr_cnt % 20 == 0:
-                    print(self.environment.universe_history)
                     if self.itr_cnt == 20:
                         _ = self.memory_sample_idx.popleft()
                     fit_iter = len(self.memory_sample_idx) // 50 + 1
@@ -281,7 +279,7 @@ class ReinforcementLearner:
                     print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 20.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
                                                       (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
                     mean_copy = 0.
-                    exit()
+
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
                     print('loss is nan!')
                     return
