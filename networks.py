@@ -30,9 +30,9 @@ class Network:
         self.activation_last = activation
         self.value_flag = value_flag
         if self.value_flag:
-            self.last_idx = -3
+            self.last_idx = -4
         else:
-            self.last_idx = -2
+            self.last_idx = -3
         self.batch_size = batch_size
 
     def save_model(self, model_path):
@@ -46,10 +46,11 @@ class Network:
 class DNN(Network):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sub_models = [self.mini_dnn() for _ in range(self.num_ticker - self.last_idx)]
+        sub_models = [self.mini_dnn() for _ in range(self.num_ticker + 1)]
         # 마지막 input은 policy : index, value: action
         inp = [Input(shape=(None, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input(shape=(None, self.num_index)))
+        inp.append(Input(shape=(self.num_ticker,)))
         inp.append(Input(shape=(self.num_ticker,)))
         if self.value_flag:
             inp.append(Input(shape=(self.num_ticker,)))
@@ -77,16 +78,20 @@ class DNN(Network):
     def get_network(self, inp, sub_models):
         output = [tf.squeeze(m(i), axis=-2) for i, m in zip(inp[:self.last_idx], sub_models[:self.last_idx])]
         output.append(tf.squeeze(sub_models[self.last_idx](inp[self.last_idx]), axis=-2))
-        output.append(sub_models[self.last_idx+1](inp[self.last_idx+1]))
+        output.append(inp[self.last_idx + 1])
+        output.append(inp[self.last_idx + 2])
         if self.value_flag:
-            output.append(sub_models[-1](inp[-1]))
+            output.append(inp[-1])
         output = Concatenate()(output)
+        output = Dense(2048, activation=self.activation, kernel_initializer=self.initializer)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
         output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
         # output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
         # output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
+
 
 # refer to paper DTML(jaemin yoo)
 # Accurate Multivariate Stock Movement Prediction via Data-Axis Transformer with Multi-Level Contexts
@@ -133,7 +138,8 @@ class AttentionLSTM(Network):
 
     def get_network(self, inp, sub_models, qkv_models, mha):
         inp_action = None
-        inp_portf = inp[self.last_idx+1]
+        inp_ksportf = inp[self.last_idx+1]
+        inp_portf = inp[self.last_idx+2]
         inp_data = inp[:self.last_idx+1]
         if self.value_flag:
             inp_action = inp[-1]
@@ -149,9 +155,9 @@ class AttentionLSTM(Network):
 
         output = tf.reshape(h_p, (-1, self.num_ticker * 32))
         if self.value_flag:
-            output = [output, inp_portf, inp_action]
+            output = [output, inp_portf, inp_ksportf, inp_action]
         else:
-            output = [output, inp_portf]
+            output = [output, inp_portf, inp_ksportf]
         output = Concatenate(axis=-1)(output)
         output = Dense(2048, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dropout(0.1, trainable=self.trainable)(output)
@@ -200,11 +206,9 @@ class pi_network:
 
         return pi_action, log_prob_pi
 
-
     def gaussian_likelihood(self, x, mu, log_std):
         pre_sum = -0.5 * (((x - mu) / (tf.exp(log_std) + EPS)) ** 2 + 2 * log_std + np.log(2 * np.pi))
         return pre_sum
-
 
     def learn(self, s, last_s, value_network):
         with tf.GradientTape() as tape:
@@ -219,12 +223,12 @@ class pi_network:
 
         return tf.reduce_mean(loss_pi)
 
-
     def save_model(self, model_path):
         self.network.save_model(model_path)
 
     def load_model(self, model_path):
         self.network.load_model(model_path)
+
 
 class q_network:
     def __init__(self, net='dnn', lr=0.001, *args, **kargs):

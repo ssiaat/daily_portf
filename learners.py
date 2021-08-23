@@ -91,7 +91,7 @@ class ReinforcementLearner:
         self.discount_factor = 0.9  # 할인율
         self.deterministic = True if self.test else False
         self.polyak = 0.98
-        self.batch_size = 5
+        self.batch_size = 10
         self.max_sample_len = 200
         self.clip = clip
 
@@ -222,6 +222,7 @@ class ReinforcementLearner:
             # 환경, 에이전트, 신경망, 가시화, 메모리 초기화
             self.reset()
             while True:
+                print(len(self.environment.universe))
                 # 샘플 생성, sample = [sample, sample of index]
                 sample, idx = self.build_sample()
 
@@ -231,6 +232,7 @@ class ReinforcementLearner:
                     print(f'change universe  {len(self.diff_stocks_idx)}  {self.price_data.index[self.environment.idx + self.num_steps - 1]}')
                 next_sample = self.environment.transform_sample(sample[0])
                 next_sample.append(np.array([sample[1]]))
+                next_sample.append(np.array([sample[2]]))
                 next_sample.append(np.array([self.agent.portfolio_ratio]))
 
                 # 시총 가중으로 오늘 투자할 포트폴리오 비중 결정
@@ -270,15 +272,16 @@ class ReinforcementLearner:
                 # 반복에 대한 정보 갱신
                 self.itr_cnt += 1
                 if self.itr_cnt % 20 == 0:
+                    print(self.environment.universe_history)
                     if self.itr_cnt == 20:
                         _ = self.memory_sample_idx.popleft()
-                    fit_iter = 50 if len(self.memory_sample_idx) == self.max_sample_len else 10
+                    fit_iter = len(self.memory_sample_idx) // 50 + 1
                     for _ in range(fit_iter):
                         self.fit()
                     print('{:,} {:.4f} {:.4f} {:.4f}'.format(self.agent.portfolio_value, mean_copy / 20.0, (self.agent.portfolio_value - self.agent.initial_balance) / self.agent.initial_balance,
                                                       (self.environment.get_ks() - self.environment.ks_data.iloc[0]) / self.environment.ks_data.iloc[0]))
                     mean_copy = 0.
-
+                    exit()
                 if tf.math.is_nan(self.value_loss) or tf.math.is_nan(self.policy_loss):
                     print('loss is nan!')
                     return
@@ -355,29 +358,42 @@ class A2CLearner(ReinforcementLearner):
         # 행동에 대한 보상은 다음날 알 수 있음
         s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
         s_index = np.zeros((self.batch_size, 1, self.num_steps, self.num_index))
+        ks_portf_state = np.zeros((self.batch_size, self.num_ticker))
         portf_state = np.zeros((self.batch_size, self.num_ticker))
+
         next_s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
         next_s_index = np.zeros((self.batch_size,  1, self.num_steps, self.num_index))
+        ks_portf_next_state = np.zeros((self.batch_size, self.num_ticker))
         portf_next_state = np.zeros((self.batch_size, self.num_ticker))
+
         last_s = np.zeros((self.batch_size, self.num_ticker, 1, self.num_steps, self.num_features))
         last_s_index = np.zeros((self.batch_size, 1, self.num_steps, self.num_index))
+        ks_portf_last_state = np.zeros((self.batch_size, self.num_ticker))
         portf_last_state = np.zeros((self.batch_size, self.num_ticker))
+
         action = np.zeros((self.batch_size, self.num_ticker))
         reward = np.zeros((self.batch_size, self.num_ticker))
         d = np.zeros((self.batch_size, 1))
+
         for i, idx in enumerate(idx_batch):
             sample = self.environment.get_training_data(idx)
             s[i] = self.environment.transform_sample(sample[0])
             s_index[i] = np.array([sample[1]])
+            ks_portf_state[i] = np.array(sample[2])
             portf_state[i] = np.array(self.memory_pr.iloc[idx].dropna().values)
+
             sample = self.environment.get_training_data(idx + 1)
             next_s[i] = self.environment.transform_sample(sample[0])
             next_s_index[i] = np.array([sample[1]])
+            ks_portf_next_state[i] = np.array(sample[2])
             portf_next_state[i] = np.array(self.memory_pr.iloc[idx + 1].dropna().values)
+
             sample = self.environment.get_training_data(idx - 1)
             last_s[i] = self.environment.transform_sample(sample[0])
             last_s_index[i] = np.array([sample[1]])
+            ks_portf_last_state[i] = np.array(sample[2])
             portf_last_state[i] = np.array(self.memory_pr.iloc[idx - 1].dropna().values)
+
             action[i] = np.array(self.memory_action[idx])
             reward[i] = self.memory_reward[idx+1]
             if idx == len(self.price_data) - 1:
@@ -386,12 +402,17 @@ class A2CLearner(ReinforcementLearner):
         # input 형태로 변경
         s = list(np.squeeze(s.swapaxes(0,1), axis=2))
         s.append(np.squeeze(s_index, axis=1))
+        s.append(ks_portf_state)
         s.append(portf_state)
+
         next_s = list(np.squeeze(next_s.swapaxes(0, 1), axis=2))
         next_s.append(np.squeeze(next_s_index, axis=1))
+        next_s.append(ks_portf_next_state)
         next_s.append(portf_next_state)
+
         last_s = list(np.squeeze(last_s.swapaxes(0, 1), axis=2))
         last_s.append(np.squeeze(last_s_index, axis=1))
+        last_s.append(ks_portf_last_state)
         last_s.append(portf_last_state)
 
         return s, action, reward, last_s, next_s, d

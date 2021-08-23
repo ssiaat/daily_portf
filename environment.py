@@ -1,4 +1,6 @@
 import numpy as np
+import pandas as pd
+
 
 class Environment:
 
@@ -28,6 +30,7 @@ class Environment:
 
         self.universe = list(self.cap_data.iloc[0].dropna().index)[:self.num_ticker]
         self.last_universe = list(self.cap_data.iloc[0].dropna().index)[:self.num_ticker]
+        self.universe_history = pd.DataFrame(columns=range(200))
 
     def reset(self):
         self.idx = -1
@@ -48,6 +51,7 @@ class Environment:
 
     # test시 1년이 지나면 stock code변경
     def update_stock_codes(self):
+        self.universe_history.loc[self.idx] = self.universe
         self.last_universe = self.universe.copy()
         today_stock_codes = self.cap_data.loc[self.date].dropna().index[:self.num_ticker]
         diff_universe = [x for x in today_stock_codes if x not in self.last_universe]
@@ -85,12 +89,13 @@ class Environment:
         return self.ks_data.iloc[0]
 
     def get_training_data(self, idx):
+        universe = self.universe_history.iloc[idx].values
         date_idx = self.date_list[idx:idx + self.num_steps]
         sample = self.training_data.loc[date_idx].reset_index().drop('key_0', axis=1).set_index('level_1')
-        sample = sample.loc[self.universe].values
+        sample = sample.loc[universe].values
         sample_index = self.index_ppc.loc[date_idx].values
-
-        return [sample, sample_index]
+        ks_portf = self.cap_data.loc[date_idx][universe].fillna(0).values
+        return [sample, sample_index, ks_portf]
 
     def transform_sample(self, sample):
         sample = sample.reshape(self.num_ticker, self.num_steps, self.num_features)
