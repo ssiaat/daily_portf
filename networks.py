@@ -57,17 +57,17 @@ class DNN(Network):
 
     def residual_layer(self, inp, hidden_size):
         output_r = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(inp)
-        # output_r = Dropout(0.1, trainable=self.trainable)(output_r)
+        output_r = Dropout(0.1, trainable=self.trainable)(output_r)
         output = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(output_r)
-        # output = Dropout(0.1, trainable=self.trainable)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
         output = Dense(hidden_size, activation=self.activation, kernel_initializer=self.initializer)(output)
-        # output = Dropout(0.1, trainable=self.trainable)(output)
+        output = Dropout(0.1, trainable=self.trainable)(output)
         return output + output_r
 
     def mini_dnn(self):
         model = Sequential()
         model.add(Dense(256, activation=self.activation, kernel_initializer=self.initializer))
-        # model.add(Dropout(0.1, trainable=self.trainable))
+        model.add(Dropout(0.1, trainable=self.trainable))
         # model.add(Dense(128, activation=self.activation, kernel_initializer=self.initializer))
         # model.add(Dropout(0.1, trainable=self.trainable))
         model.add(Dense(32, activation=self.activation, kernel_initializer=self.initializer))
