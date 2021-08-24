@@ -95,7 +95,7 @@ class Environment:
         sample = sample.loc[universe].values
         sample_index = self.index_ppc.loc[date_idx].values
         ks_portf = self.cap_data.loc[date_idx][universe].fillna(0).values
-        return [sample, sample_index, ks_portf]
+        return [sample, sample_index, [ks_portf[-1]]]
 
     def transform_sample(self, sample):
         sample = sample.reshape(self.num_ticker, self.num_steps, self.num_features)

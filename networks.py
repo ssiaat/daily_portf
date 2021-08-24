@@ -105,6 +105,7 @@ class AttentionLSTM(Network):
         inp = [Input((self.num_steps, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input((self.num_steps, self.num_index)))
         inp.append(Input((self.num_ticker,)))
+        inp.append(Input((self.num_ticker,)))
         if self.value_flag:
             inp.append(Input(shape=(self.num_ticker,)))
         sub_models = [self.mini_model() for _ in range(self.num_ticker + 1)]
