@@ -201,9 +201,9 @@ class pi_network:
         # apply squashing
         log_prob_pi -= 2*(np.log(2) - pi - tf.nn.softplus(-2*pi))
         if deterministic:
-            pi_action = tf.nn.softmax(mu)
+            pi_action = tf.math.tanh(mu)
         else:
-            pi_action = tf.nn.softmax(pi)
+            pi_action = tf.math.tanh(pi)
 
         return pi_action, log_prob_pi
 

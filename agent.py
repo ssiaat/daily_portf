@@ -8,7 +8,7 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = 0.19
+    OVER_CAP = 0.05
     OVER_CAP_RANGE = 0.03
 
     # 행동
@@ -97,28 +97,9 @@ class Agent:
         curr_cap = np.where(np.isnan(curr_cap), 0., curr_cap)
         curr_price = self.environment.get_price()
         curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap)).numpy()
-        ratio = tf.where(curr_cap == 0., 0, ratio).numpy()
+        ratio = tf.where(curr_cap == 0., 0, ratio).numpy() * self.OVER_CAP + curr_cap
 
-        sell_ratio = np.where(ratio < 0., ratio, 0.) * curr_cap
-        print(sell_ratio.sum())
-        diff = abs(sell_ratio.sum()) - self.OVER_CAP
-        diff_ratio = min(abs(sell_ratio.sum()), self.OVER_CAP)
-        print(diff_ratio)
-        if diff > 0:
-            sell_ratio -= self.set100(np.where(ratio < 0., ratio, 0.)).numpy() * diff
-
-        ratio = sell_ratio + self.set100(np.where(ratio > 0., ratio, 0.)).numpy() * diff_ratio + curr_cap
-        print(tf.reduce_sum(tf.abs(ratio - curr_cap)))
-
-        # want_trade = ratio * curr_cap
-        # want_trade_mean = (abs(want_trade[want_trade < 0].sum()) + want_trade[want_trade > 0].sum()) / 2
-        # diff_from_cap = self.OVER_CAP_RANGE * want_trade_mean + self.OVER_CAP
-        #
-        # plus_softmax = softmax(np.where(ratio > 0., ratio, -1e10))
-        # minus_softmax = softmax(-1 * np.where(ratio < 0., ratio, 1e10)) * -1
-        # ratio = curr_cap + (plus_softmax + minus_softmax) * diff_from_cap
-        # print(ratio[ratio < 0.].sum())
-        return tf.cast(ratio, tf.float32)
+        return tf.cast(self.set100(ratio), tf.float32)
 
     def renewal_portfolio_ratio(self, transaction, buy_value_each=None, diff_stock_idx=None):
         if tf.reduce_sum(self.num_stocks) > 0:

@@ -242,8 +242,9 @@ class ReinforcementLearner:
 
                 # 오늘 가격으로 변경된 portf_value로 어제 투자에 대한 보상 계산
                 immediate_reward = self.agent.get_reward()
-                if self.clip:
-                    pi = self.agent.similar_with_cap(pi)
+                pi = self.agent.similar_with_cap(pi)
+                print(pi.numpy()[:5])
+                print(tf.reduce_sum(pi))
                 # else:
                 #     ratio, penalty = self.agent.penalty_diff_bm(pi)
                 #     immediate_reward += penalty
