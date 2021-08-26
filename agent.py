@@ -198,7 +198,7 @@ class Agent:
         # 포트폴리오 가치 갱신, 거래세 반영
         self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)
 
-        return self.portfolio_ratio - self.last_portfolio_ratio
+        return
 
 
     def tf2np(self, tensor):

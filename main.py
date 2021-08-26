@@ -20,7 +20,7 @@ start_year = 2004 # 시작 연도
 end_year = 2016   # 종료 연도
 
 lr = 0.1
-net = 'lstm'
+net = 'dnn'
 discount_factor = 0.9
 balance = 1e10     # 초기 자본금
 num_epoches = 10
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         num_steps = 1
 
     # 로그, Keras Backend 설정을 먼저하고 RLTrader 모듈들을 이후에 임포트해야 함
-    from learners import A2CLearner
+    from learners import SACLearner
 
     # 모델 경로 준비
     if value_network1_name is not None:
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                      'output_path': output_path, 'value_network1_path': value_network1_path, 'value_network2_path':value_network2_path,
                      'target_value_network1_path': target_value_network1_path, 'target_value_network2_path': target_value_network2_path, 'policy_network_path': policy_network_path}
 
-    learner = A2CLearner(**{**common_params})
+    learner = SACLearner(**{**common_params})
     if learner is not None:
         learner.run(balance=balance, num_epoches=num_epoches)
         learner.save_models()

@@ -30,9 +30,9 @@ class Network:
         self.activation_last = activation
         self.value_flag = value_flag
         if self.value_flag:
-            self.last_idx = -4
-        else:
             self.last_idx = -3
+        else:
+            self.last_idx = -2
         self.batch_size = batch_size
 
     def save_model(self, model_path):
@@ -51,7 +51,7 @@ class DNN(Network):
         inp = [Input(shape=(None, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input(shape=(None, self.num_index)))
         inp.append(Input(shape=(self.num_ticker,)))
-        inp.append(Input(shape=(self.num_ticker,)))
+        # inp.append(Input(shape=(self.num_ticker,)))
         if self.value_flag:
             inp.append(Input(shape=(self.num_ticker,)))
         self.model = self.get_network(inp, sub_models)
@@ -79,7 +79,7 @@ class DNN(Network):
         output = [tf.squeeze(m(i), axis=-2) for i, m in zip(inp[:self.last_idx], sub_models[:self.last_idx])]
         output.append(tf.squeeze(sub_models[self.last_idx](inp[self.last_idx]), axis=-2))
         output.append(inp[self.last_idx + 1])
-        output.append(inp[self.last_idx + 2])
+        # output.append(inp[self.last_idx + 2])
         if self.value_flag:
             output.append(inp[-1])
         output = Concatenate()(output)
@@ -105,7 +105,7 @@ class AttentionLSTM(Network):
         inp = [Input((self.num_steps, self.input_dim)) for _ in range(self.num_ticker)]
         inp.append(Input((self.num_steps, self.num_index)))
         inp.append(Input((self.num_ticker,)))
-        inp.append(Input((self.num_ticker,)))
+        # inp.append(Input((self.num_ticker,)))
         if self.value_flag:
             inp.append(Input(shape=(self.num_ticker,)))
         sub_models = [self.mini_model() for _ in range(self.num_ticker + 1)]
@@ -140,7 +140,7 @@ class AttentionLSTM(Network):
     def get_network(self, inp, sub_models, qkv_models, mha):
         inp_action = None
         inp_ksportf = inp[self.last_idx+1]
-        inp_portf = inp[self.last_idx+2]
+        # inp_portf = inp[self.last_idx+2]
         inp_data = inp[:self.last_idx+1]
         if self.value_flag:
             inp_action = inp[-1]
@@ -156,9 +156,9 @@ class AttentionLSTM(Network):
 
         output = tf.reshape(h_p, (-1, self.num_ticker * 32))
         if self.value_flag:
-            output = [output, inp_portf, inp_ksportf, inp_action]
+            output = [output, inp_ksportf, inp_action]
         else:
-            output = [output, inp_portf, inp_ksportf]
+            output = [output, inp_ksportf]
         output = Concatenate(axis=-1)(output)
         output = Dense(2048, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dropout(0.1, trainable=self.trainable)(output)
@@ -167,6 +167,7 @@ class AttentionLSTM(Network):
         output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
 
         return Model(inp, output)
+
 
 LOG_STD_MIN = -20
 LOG_STD_MAX = 1
@@ -184,7 +185,6 @@ class pi_network:
         self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
         self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
-
     def predict(self, s, deterministic=False, learn=True):
         output = self.network.model(s)
         mu = tf.reshape(self.mu_layer(output), (-1, self.network.num_ticker))
@@ -199,7 +199,7 @@ class pi_network:
         log_prob_pi = self.gaussian_likelihood(pi, mu, log_std)
 
         # apply squashing
-        log_prob_pi -= 2*(np.log(2) - pi - tf.nn.softplus(-2*pi))
+        log_prob_pi -= 2 * (np.log(2) - pi - tf.nn.softplus(-2*pi))
         if deterministic:
             pi_action = tf.math.tanh(mu)
         else:
@@ -211,12 +211,11 @@ class pi_network:
         pre_sum = -0.5 * (((x - mu) / (tf.exp(log_std) + EPS)) ** 2 + 2 * log_std + np.log(2 * np.pi))
         return pre_sum
 
-    def learn(self, s, last_s, value_network):
+    def learn(self, s, value_network):
         with tf.GradientTape() as tape:
             pi, logp_pi = self.predict(s)
-            pi2, _ = self.predict(last_s)
             # pi 업데이트라 q_net gradient off
-            q1_pi, q2_pi = tf.stop_gradient(value_network.predict(s, pi - pi2))
+            q1_pi, q2_pi = tf.stop_gradient(value_network.predict(s, pi))
             q_pi = tf.math.minimum(q1_pi, q2_pi)
             loss_pi = tf.reduce_mean(self.alpha * logp_pi - q_pi, axis=1)
         gradients = tape.gradient(loss_pi, self.network.model.trainable_variables)
