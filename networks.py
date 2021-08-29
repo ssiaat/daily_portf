@@ -201,9 +201,9 @@ class pi_network:
         # apply squashing
         log_prob_pi -= 2 * (np.log(2) - pi - tf.nn.softplus(-2*pi))
         if deterministic:
-            pi_action = tf.math.tanh(mu)
+            pi_action = mu
         else:
-            pi_action = tf.math.tanh(pi)
+            pi_action = tf.clip_by_value(pi, -1.0, 1.0)
 
         return pi_action, log_prob_pi
 
@@ -275,7 +275,7 @@ class q_network:
 
     def load_model(self, model_path):
         self.network1.load_model(model_path[0])
-        self.network2.save_model(model_path[1])
+        self.network2.load_model(model_path[1])
 
 
 

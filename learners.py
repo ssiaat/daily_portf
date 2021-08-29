@@ -28,7 +28,7 @@ class ReinforcementLearner:
         assert lr > 0
 
         # 학습여부 설정
-        self.trainable = False if test else True
+        self.trainable = True
         self.test = test
 
         # 환경 설정
@@ -83,13 +83,13 @@ class ReinforcementLearner:
         self.policy_network_path = policy_network_path
         self.output_path = output_path
 
-        # test시 연간 변화 종목
         self.diff_stocks_idx = None
 
         # hyperparameters
         self.alpha = 0.2  # entropy 반영 비율
         self.discount_factor = 0.9  # 할인율
-        self.deterministic = True if self.test else False
+        # self.deterministic = True if self.test else False
+        self.deterministic = False
         self.polyak = 0.98
         self.batch_size = 16
         self.max_sample_len = 200
@@ -103,7 +103,6 @@ class ReinforcementLearner:
             print('reuse')
             self.value_network.load_model(model_path=[self.value_network1_path, self.value_network2_path])
 
-
     def init_target_value_network(self, activation='linear'):
         self.target_value_network = q_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                             num_ticker=self.num_ticker, num_index=self.num_index, num_steps=self.num_steps,
@@ -113,9 +112,7 @@ class ReinforcementLearner:
         if self.reuse_models and os.path.exists(self.value_network1_path):
             self.target_value_network.load_model(model_path=[self.target_value_network1_path, self.target_value_network2_path])
 
-
-    # tanh -> linear
-    def init_policy_network(self, activation='linear'):
+    def init_policy_network(self, activation='tanh'):
         self.policy_network = pi_network(net=self.net, lr=self.lr, input_dim=self.num_features, output_dim=self.output_dim,
                                          num_ticker=self.num_ticker, num_steps=self.num_steps, num_index=self.num_index,
                                          trainable=self.trainable, activation=activation, value_flag=False, alpha=self.alpha)
