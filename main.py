@@ -19,11 +19,11 @@ num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
 start_year = 2017 # 시작 연도
 end_year = 2021   # 종료 연도
 
-lr = 0.1
+lr = 1e-4
 net = 'dnn'
 discount_factor = 0.9
 balance = 1e10     # 초기 자본금
-num_epoches = 5
+num_epoches = 10
 hold_criter = 0.  # 포트폴리오 변동 줄이기 위해 hold_criter이하면 보유
 
 value_network1_name = None

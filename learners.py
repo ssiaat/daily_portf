@@ -89,7 +89,7 @@ class ReinforcementLearner:
         self.alpha = 0.2  # entropy 반영 비율
         self.discount_factor = 0.9  # 할인율
         # self.deterministic = True if self.test else False
-        self.deterministic = False
+        self.deterministic = True if test else False
         self.polyak = 0.98
         self.batch_size = 16
         self.max_sample_len = 200
@@ -209,8 +209,6 @@ class ReinforcementLearner:
         max_portfolio_value = 0
         epoch_win_cnt = 0
 
-
-
         # 학습 반복
         print('Start Learning')
         for epoch in range(num_epoches):
@@ -240,7 +238,7 @@ class ReinforcementLearner:
                 self.agent.renewal_portfolio_ratio(transaction=False, diff_stock_idx=self.diff_stocks_idx)
 
                 # 오늘 가격으로 변경된 portf_value로 어제 투자에 대한 보상 계산
-                immediate_reward = self.agent.get_reward()
+                immediate_reward = self.agent.get_reward(self.diff_stocks_idx)
                 ratio = self.agent.similar_with_cap(pi)
 
                 # else:

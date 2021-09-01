@@ -181,7 +181,7 @@ class pi_network:
 
         self.alpha = alpha
         self.discount_factor = 0.9
-        self.optimizer = optimizer(lr)
+        self.optimizer = optimizer(lr, clipvalue=0.5)
         self.mu_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
         self.log_std_layer = Dense(self.network.output_dim, activation=self.network.activation_last, kernel_initializer=self.network.initializer)
 
@@ -243,8 +243,8 @@ class q_network:
         self.layer2 = Dense(self.network2.output_dim, activation=self.network2.activation_last,
                             kernel_initializer=self.network2.initializer)
         self.loss = mse
-        self.optimizer1 = optimizer(lr)
-        self.optimizer2 = optimizer(lr)
+        self.optimizer1 = optimizer(lr, clipvalue=0.5)
+        self.optimizer2 = optimizer(lr, clipvalue=0.5)
 
     def predict(self, s, a):
         s.append(a)

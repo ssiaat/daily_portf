@@ -75,7 +75,7 @@ class Agent:
         self.initial_balance = balance
 
     def set100(self, tensor):
-        if tf.reduce_sum(tensor):
+        if tf.reduce_sum(tensor) != 0:
             return tensor / tf.reduce_sum(tensor)
         else:
             return tensor
@@ -120,7 +120,6 @@ class Agent:
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.cast(tf.reduce_sum(self.portfolio_value_each), tf.float32) + self.balance
 
-
     def decide_action(self, ratio):
         # hold 여부 결정
         if self.hold_criter > 0.:
@@ -134,7 +133,8 @@ class Agent:
         if diff_stocks_idx is not None:
             curr_price = self.environment.get_price_last_portf()
         sell_trading_unit = tf.math.floor(tf.clip_by_value(self.portfolio_ratio - ratio, 0., 10.) *\
-                                     self.portfolio_value_each / np.where(curr_price == 0., 1., curr_price))
+                                     tf.cast(tf.reduce_sum(self.portfolio_value_each), tf.float32) / np.where(curr_price == 0., 1., curr_price))
+        sell_trading_unit = tf.clip_by_value(sell_trading_unit, 0., self.num_stocks)
 
         # 변경 종목 idx중 기존 종목 모두 매도
         if diff_stocks_idx is not None:
@@ -153,6 +153,9 @@ class Agent:
         if diff_stocks_idx is not None:
             if tf.is_tensor(buy_trading_ratio):
                 buy_trading_ratio = tf.make_ndarray(tf.make_tensor_proto(buy_trading_ratio))
+            buy_trading_ratio[diff_stocks_idx] = 0.
+            buy_trading_ratio = self.set100(buy_trading_ratio).numpy()
+            buy_trading_ratio *= (1. - tf.reduce_sum(tf.gather(ratio, diff_stocks_idx)).numpy())
             buy_trading_ratio[diff_stocks_idx] = tf.gather(ratio, diff_stocks_idx)
 
         # 거래정지 상태인데 거래하는 경우 방지
@@ -160,17 +163,23 @@ class Agent:
                                     (tf.reduce_sum(sell_trading_value) + self.balance) / np.where(curr_price == 0., 1., curr_price))
         return buy_trading_unit, sell_trading_unit
 
-    def get_reward(self):
+    def get_reward(self, diff_stock_idx=None):
         # ks200 대비 수익률로 보상 결정
         ks_now = self.environment.get_ks()
         ks_ret = (ks_now - self.base_ks) / self.base_ks
         self.profitloss = ((self.portfolio_value - self.initial_balance) / self.initial_balance) - ks_ret
-
         if self.profitloss > 0:
             self.win_cnt += 1
-        # self.portfolio_ratio = tf.cast(self.portfolio_ratio, tf.float32)
+
+        price_now = self.environment.get_price()
+        price_last = self.environment.get_last_price()
+        portf_ret = (price_now - price_last) / price_last
+        if diff_stock_idx is not None:
+            portf_ret[diff_stock_idx] = 0.
+
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
-        self.immediate_reward = (self.profitloss - self.last_profitloss) * tf.abs(self.portfolio_ratio - self.last_portfolio_ratio) * 100000
+        curr_cap = self.environment.get_cap()
+        self.immediate_reward = portf_ret * (self.portfolio_ratio - self.last_portfolio_ratio) * 100000
 
         return self.immediate_reward
 
@@ -199,7 +208,6 @@ class Agent:
         self.renewal_portfolio_ratio(transaction=True, buy_value_each=buy_value_each)
 
         return
-
 
     def tf2np(self, tensor):
         return tf.make_ndarray(tf.make_tensor_proto(tensor))

@@ -71,6 +71,9 @@ class Environment:
             return self.observe_price.values.reshape(-1,)
         return None
 
+    def get_last_price(self):
+        return self.price_data.iloc[self.idx + self.num_steps - 2][self.universe].values.reshape(-1,)
+
     # 종목 변경 시 지난 포트폴리오의 현재 가격 얻어올 때 사용
     def get_price_last_portf(self):
         return self.price_data.iloc[self.idx + self.num_steps - 1][self.last_universe].values.reshape(-1,)
