@@ -282,8 +282,9 @@ class ReinforcementLearner:
                     return
 
             # 에포크 종료 후 학습
-            for i in range(50):
-                self.fit(finished=True)
+            if not self.test:
+                for i in range(50):
+                    self.fit(finished=True)
             # print(f'differ between port and cap: {self.agent.portfolio_ratio - self.environment.get_cap()}')
 
             # 에포크 관련 정보 로그 기록
