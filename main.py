@@ -19,8 +19,8 @@ num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
 start_year = 2004 # 시작 연도
 end_year = 2016   # 종료 연도
 
-lr = 1e-4
-net = 'dnn'
+lr = 1e-5
+net = 'lstm'
 discount_factor = 0.9
 balance = 1e10     # 초기 자본금
 num_epoches = 7

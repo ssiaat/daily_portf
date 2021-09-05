@@ -179,7 +179,7 @@ class Agent:
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
         curr_cap = self.environment.get_cap()
-        self.immediate_reward = portf_ret * (self.portfolio_ratio - curr_cap) * 100000
+        self.immediate_reward = (portf_ret - ks_ret) * (self.portfolio_ratio - curr_cap) * 100000
 
         return self.immediate_reward
 
