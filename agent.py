@@ -117,6 +117,8 @@ class Agent:
             if transaction:
                 # 매도 수수료는 balance에 반영 -> 매수만 반영
                 self.portfolio_value_each -= tf.math.ceil(buy_value_each * self.TRADING_TAX[0])
+                self.num_stocks = tf.where(self.portfolio_value_each < 0., 0, self.num_stocks)
+                self.portfolio_value_each = tf.where(self.portfolio_value_each < 0., 0., self.portfolio_value_each)
             self.portfolio_ratio = self.set100(self.portfolio_value_each)
             self.portfolio_value = tf.cast(tf.reduce_sum(self.portfolio_value_each), tf.float32) + self.balance
 
