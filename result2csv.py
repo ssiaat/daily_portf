@@ -26,5 +26,9 @@ portf_ratio.columns = ['ticker', 'portf_ratio']
 portf_ratio['stock'] = stock_name
 portf_ratio['ks200'] = ks200.values
 portf_ratio['ret'] = (price[1].values - price[0].values) / price[0].values
-portf_ratio = portf_ratio[['ticker', 'stock', 'portf_ratio', 'ks200', 'ret']]
-print(portf_ratio)
+portf_ratio = portf_ratio[['ticker', 'stock', 'portf_ratio', 'ks200', 'ret']].set_index('ticker')
+portf_ratio.to_csv('result/dnn_7epoch.csv', encoding='cp949')
+
+print(100 - ret.iloc[-2]['copy'])
+print((portf_ratio['ret'] * portf_ratio['ks200']).sum())
+print((portf_ratio['ret'] * portf_ratio['portf_ratio']).sum())

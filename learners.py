@@ -88,8 +88,8 @@ class ReinforcementLearner:
         # hyperparameters
         self.alpha = 0.2  # entropy 반영 비율
         self.discount_factor = 0.9  # 할인율
-        # self.deterministic = True if self.test else False
-        self.deterministic = False
+        self.deterministic = True if self.test else False
+        # self.deterministic = False
         self.polyak = 0.98
         self.batch_size = 16
         self.max_sample_len = 200
