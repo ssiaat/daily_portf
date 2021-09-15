@@ -15,14 +15,14 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Hyperparameters
 num_stocks = 200  # universe에 존재하는 종목수
-num_steps = 5     # lstm 모델에서 input의 기간(날짜 수)
-start_year = 2017 # 시작 연도
-end_year = 2021   # 종료 연도
+num_steps = 60     # lstm 모델에서 input의 기간(날짜 수)
+start_year = 2004 # 시작 연도
+end_year = 2016   # 종료 연도
 
-lr = 1e-4
+lr = 1e-3
 net = 'dnn'
 discount_factor = 0.9
-balance = 1e10     # 초기 자본금
+balance = 1e10    # 초기 자본금
 num_epoches = 7
 hold_criter = 0.  # 포트폴리오 변동 줄이기 위해 hold_criter이하면 보유
 
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
     price_data, index_data, index_ppc, training_data = make_data(start_date, end_date, args.stationary, args.test)
     capital = capital.loc[price_data.index]
-
+    exit()
     # 공통 파라미터 설정
     common_params = {'num_features': len(training_data.columns), 'num_index' : len(index_ppc.columns), 'net':net, 'clip' : args.clip,
                      'num_ticker': num_stocks, 'hold_criter': hold_criter, 'num_steps':num_steps, 'lr': lr, 'test': args.test, 'reuse_models': reuse_models,

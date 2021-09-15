@@ -150,4 +150,3 @@ def load_data_sql(fpath, start_idx, end_idx, date_idx, stationary, test):
 
     # date 처리
     return price_data, training_data
-

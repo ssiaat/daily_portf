@@ -88,6 +88,7 @@ class DNN(Network):
         output = self.residual_layer(output, 1024)
         output = self.residual_layer(output, 512)
         # output = Dense(512, activation=self.activation, kernel_initializer=self.initializer)(output)
+        # output = Dropout(0.1, trainable=self.trainable)(output)
         # output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         output = Dense(256, activation=self.activation, kernel_initializer=self.initializer)(output)
         return Model(inp, output)
@@ -178,7 +179,6 @@ class pi_network:
             self.network = DNN(*args, **kargs)
         else:
             self.network = AttentionLSTM(*args, **kargs)
-
         self.alpha = alpha
         self.discount_factor = 0.9
         self.optimizer = optimizer(lr, clipvalue=0.5)

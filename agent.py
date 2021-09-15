@@ -8,7 +8,7 @@ class Agent:
     TRADING_TAX = [0.001, 0.003]  # 거래세 매수, 매도
 
     # 시총 비중 대비 매수 매도 차이
-    OVER_CAP = 0.05
+    OVER_CAP = 0.4
     OVER_CAP_RANGE = 0.03
 
     # 행동
@@ -80,24 +80,14 @@ class Agent:
         else:
             return tensor
 
-    def penalty_diff_bm(self, ratio):
-        curr_cap = self.environment.get_cap()
-        curr_cap = self.set100(np.where(np.isnan(curr_cap) == True, 0., curr_cap))
-        # ratio = tf.math.softmax(ratio)
-        ratio = self.set100(tf.where(curr_cap == 0., 0., ratio))
-
-        penalty = tf.math.abs(curr_cap - ratio) / 2.0 * 100.0
-        print('{:.4f}' .format(tf.reduce_sum(penalty)))
-        if tf.reduce_sum(penalty) < 30:
-            penalty = 0.
-        return ratio, penalty * -1.0
-
     def similar_with_cap(self, ratio):
         curr_cap = self.environment.get_cap()
         curr_cap = np.where(np.isnan(curr_cap), 0., curr_cap)
         curr_price = self.environment.get_price()
         curr_cap = self.set100(np.where(curr_price == 0., 0., curr_cap)).numpy()
-        ratio = tf.where(curr_cap == 0., 0, ratio).numpy() * self.OVER_CAP + curr_cap
+        diff = tf.clip_by_value(tf.where(curr_cap == 0., 0, ratio).numpy() * self.OVER_CAP * curr_cap * 10, curr_cap * -0.2, curr_cap * 0.2)
+        ratio = curr_cap + diff
+        ratio = tf.where(ratio < 0., 0., ratio)
 
         return tf.cast(self.set100(ratio), tf.float32)
 
@@ -148,7 +138,7 @@ class Agent:
         sell_trading_unit = tf.where(curr_price == 0., 0., sell_trading_unit)
         sell_trading_value = tf.math.floor(curr_price * sell_trading_unit * (1 - self.TRADING_TAX[1]))
 
-        buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0., 10.)
+        buy_trading_ratio = tf.clip_by_value(ratio - self.portfolio_ratio, 0., 10.) * 10
         curr_price = self.environment.get_price()
 
         # 새로운 종목 모두 매수
@@ -181,7 +171,7 @@ class Agent:
 
         # 즉시 보상 - ks200 대비 아웃퍼폼, 기준 시점 대비 변화가 클수록 기여도 큰 것으로 적용
         curr_cap = self.environment.get_cap()
-        self.immediate_reward = (portf_ret - ks_ret) * (self.portfolio_ratio - curr_cap) * 100000
+        self.immediate_reward = (portf_ret - ks_ret) * (self.portfolio_ratio - curr_cap) * 1000000
 
         return self.immediate_reward
 
